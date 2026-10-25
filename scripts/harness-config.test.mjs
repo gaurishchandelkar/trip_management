@@ -1,5 +1,6 @@
 // Checks that safeguards cover the code they're meant to (docs/HARNESS_LOG.md, python-e2e-whitebox retro).
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
@@ -62,4 +63,80 @@ test("badWaits catches networkidle and sleeps", () => {
   ].join("\n");
 
   assert.equal(badWaits(source).length, 2);
+});
+
+// Every outside journey needs an inside test that pins down its API calls
+// (docs/HARNESS_LOG.md, members-and-groups retro). Inside tests say which with @covers(...).
+export function journeyCoverage(journeys, contracts) {
+  const names = [...journeys.matchAll(/^def (test_\w+)\(/gm)].map(([, name]) => name);
+  const covered = new Set(
+    [...contracts.matchAll(/^@covers\(([^)]*)\)/gm)].flatMap(([, args]) =>
+      [...args.matchAll(/"(test_\w+)"/g)].map(([, name]) => name),
+    ),
+  );
+  return {
+    uncovered: names.filter((name) => !covered.has(name)),
+    unknown: [...covered].filter((name) => !names.includes(name)),
+  };
+}
+
+test("every outside journey has an inside network-contract test", () => {
+  const { uncovered, unknown } = journeyCoverage(
+    readFileSync("e2e/test_journeys.py", "utf8"),
+    readFileSync("e2e/test_network_contract.py", "utf8"),
+  );
+
+  assert.deepEqual(uncovered, [], "Add an inside test with @covers(...) for these journeys.");
+  assert.deepEqual(unknown, [], "These @covers names match no journey in test_journeys.py.");
+});
+
+test("journeyCoverage catches a journey without an inside test and a stale name", () => {
+  const journeys = "def test_sign_in(page):\n    ...\ndef test_sign_out(page):\n    ...\n";
+  const contracts = [
+    '@covers("test_sign_in", "test_renamed")',
+    "def test_sign_in_sends_one_request(page, traffic):",
+  ].join("\n");
+
+  assert.deepEqual(journeyCoverage(journeys, contracts), {
+    uncovered: ["test_sign_out"],
+    unknown: ["test_renamed"],
+  });
+});
+
+// Invisible format characters (zero-width, bidirectional overrides, BOM) make source read
+// differently from how it runs. Tests that need them spell them as escapes, such as \u200d.
+const HIDDEN = /\p{Cf}/u;
+const SOURCE = /\.(?:py|ts|tsx|js|mjs|json|toml|yml|yaml|md|css|html)$/;
+
+export function hiddenCharacters(files) {
+  return files.flatMap(([file, text]) =>
+    text
+      .split("\n")
+      .flatMap((line, index) =>
+        HIDDEN.test(line)
+          ? [
+              `${file}:${String(index + 1)}: U+${line.match(HIDDEN)[0].codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`,
+            ]
+          : [],
+      ),
+  );
+}
+
+test("tracked source files contain no invisible format characters", () => {
+  const tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" })
+    .split("\n")
+    .filter((file) => SOURCE.test(file));
+
+  const found = hiddenCharacters(tracked.map((file) => [file, readFileSync(file, "utf8")]));
+
+  assert.deepEqual(found, [], "Write these characters as escapes (\\u200d) instead.");
+});
+
+test("hiddenCharacters reports the file, line and code point", () => {
+  const files = [
+    ["a.py", 'ok = "Goa"\nbad = "Go\u200da"'],
+    ["b.ts", 'const escaped = "\\u202e";'],
+  ];
+
+  assert.deepEqual(hiddenCharacters(files), ["a.py:2: U+200D"]);
 });

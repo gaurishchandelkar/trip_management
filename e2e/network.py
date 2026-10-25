@@ -1,6 +1,7 @@
 """Records the browser's traffic so tests can assert the exact API calls (the network contract)."""
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 
@@ -8,6 +9,19 @@ from playwright.sync_api import Error, Page, Request, Response
 
 type Signature = tuple[str, str, dict[str, list[str]]]
 """(method, path, decoded query): what identifies an API call in an assertion."""
+
+
+def covers[T: Callable[..., None]](*journeys: str) -> Callable[[T], T]:
+    """Names the outside journeys in test_journeys.py whose API calls this inside test pins down.
+
+    It changes nothing at run time. scripts/harness-config.test.mjs reads it and fails when a
+    journey has no inside test, or a name points at no journey.
+    """
+
+    def mark(test: T) -> T:
+        return test
+
+    return mark
 
 
 def origin(url: str) -> str:
