@@ -34,6 +34,12 @@ const PROTECTED =
 const PROTECTED_IN_SHELL =
   /(?:>|\btee\b|\bsed\s+-i\b|\bmv\b|\bcp\b|\brm\b|\b(?:Set|Add|Clear)-Content\b|\bOut-File\b|\b(?:Copy|Move|Remove|New|Rename)-Item\b)[^|;&]*(?:\.claude[/\\]|\.github[/\\]|lefthook\.yml|eslint\.config\.js|\.secrets\.baseline)/i;
 
+// Shell writes skip the content checks below, so they ask when they could disable one:
+// a suppression comment, or a write to a file that holds thresholds or rule exclusions.
+const SHELL_WRITE =
+  /(?<![\d&])>|\btee\b|\bsed\s+-i\b|\bopen\([^)]*["'][wa+]|\bwrite_text\b|\bwriteFileSync\b|\b(?:Set|Add)-Content\b|\bOut-File\b/;
+const CHECK_CONFIG = /\b(?:pyproject\.toml|package\.json|vite\.config\.ts)\b/;
+
 function relative(filePath, projectDir) {
   return path.relative(projectDir, path.resolve(projectDir, filePath)).split(path.sep).join("/");
 }
@@ -53,6 +59,13 @@ export function evaluate({ tool_name: toolName, tool_input: input = {} }, projec
     }
     if (PROTECTED_IN_SHELL.test(command)) {
       return { decision: "ask", reason: "Shell write to harness files needs human approval." };
+    }
+    if (SHELL_WRITE.test(command) && (SUPPRESSION.test(command) || CHECK_CONFIG.test(command))) {
+      return {
+        decision: "ask",
+        reason:
+          "Shell writes skip the guard's content checks. Use Edit or Write for check config and suppressions, or ask.",
+      };
     }
     return null;
   }

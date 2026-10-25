@@ -10,7 +10,7 @@ A ready-to-use template for **agentic hyper productivity**: a minimal React + Fa
 | Pillar | What it is | Where |
 |---|---|---|
 | **Rules guide** | Operating rules, coding and security guidelines, the staged process | `AGENTS.md`, `CLAUDE.md`, `docs/RULES.md`, `docs/CODING_GUIDELINES.md`, `docs/PROCESS.md`, `docs/SECURITY_GUIDELINES.md` |
-| **Safeguards protect** | ruff (with bandit rules), pyright strict, ESLint strict, Prettier, import-linter layer contracts, pip-audit, npm audit, detect-secrets, lefthook pre-commit, agent permission rules and guard hook, branch protection | `pyproject.toml`, `eslint.config.js`, `lefthook.yml`, `.claude/`, `scripts/protect-branch.mjs` |
+| **Safeguards protect** | ruff (with bandit rules), pyright strict, ESLint strict, Prettier, import-linter layer contracts, pip-audit, npm audit, detect-secrets, lefthook pre-commit (including a refusal to commit on `main`), agent permission rules and guard hook, branch protection | `pyproject.toml`, `eslint.config.js`, `lefthook.yml`, `.claude/`, `scripts/refuse-main.mjs`, `scripts/protect-branch.mjs` |
 | **Verification gives evidence** | Unit and integration tests with 80% coverage gates, and Python Playwright E2E tests that check both the UI and the exact API calls behind it, in one pipeline locally and in CI | `npm run check`, `.github/workflows/ci.yml` |
 | **Better specs** | Agent-ready spec and plan templates | `docs/templates/` |
 | **Staged autonomy** | `/spec` → `/plan` → *human approves* → `/implement` → `/ship` → *human merges* → `/retro` | `.claude/skills/`, `.claude/agents/` |

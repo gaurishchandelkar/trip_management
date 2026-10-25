@@ -22,7 +22,7 @@ Entry format:
 ## 2026-10-25: Invisible characters reached source through tool-input escapes
 - Signal: security issue
 - What happened: Test cases for zero-width and direction-override characters were written into `backend/tests/integration/*.py` as the raw invisible characters, not escapes. The agent noticed and fixed it before commit. The cause is that tool input is JSON, so a `\u` escape typed there is decoded into the character before any file or shell sees it. The new check caught the same thing again in its own test file during this retro. Raw format characters make code read differently from how it runs (Trojan Source).
-- Improvement: safeguard. `scripts/harness-config.test.mjs` scans every tracked source file (`git ls-files`) for Unicode category Cf and reports file, line and code point. Proof: a planted U+202E in `backend/domain/models.py` failed the check; removing it made it pass. The guideline about writing doubled backslashes is drafted below, awaiting approval.
+- Improvement: safeguard. `scripts/harness-config.test.mjs` scans every tracked source file (`git ls-files`) for Unicode category Cf and reports file, line and code point. Proof: a planted U+202E in `backend/domain/models.py` failed the check; removing it made it pass. `docs/CODING_GUIDELINES.md` General item 6 says to write doubled backslashes in tool input.
 - Enforced: yes (unit stage)
 
 ## 2026-10-25: Shell writes skip the guard's content checks
@@ -34,14 +34,14 @@ Entry format:
   - a multi-command shell script that failed to parse still ran its first commands, which duplicated a class.
 
   A probe confirmed that the current guard returns no decision for `sed -i 's/fail_under = 80/fail_under = 0/' pyproject.toml`.
-- Improvement: safeguard, drafted and awaiting approval because `.claude/` is protected. The guard would ask when a shell command writes (redirect, `tee`, `sed -i`, `open(..., "w")`, `write_text`, `writeFileSync`, `Set-Content`, `Out-File`) and either contains a suppression comment or names `pyproject.toml`, `package.json` or `vite.config.ts`. It comes with 8 guard test cases; the 4 "ask" cases return no decision today. A guideline is also drafted: edit files with Edit and Write, not scripts.
-- Enforced: documented only (until the human approves the guard change)
+- Improvement: safeguard, approved by the human. `.claude/hooks/guard.mjs` now asks when a shell command writes (redirect, `tee`, `sed -i`, `open(..., "w")`, `write_text`, `writeFileSync`, `Set-Content`, `Out-File`) and either contains a suppression comment or names `pyproject.toml`, `package.json` or `vite.config.ts`. `.claude/hooks/guard.test.mjs` has 8 new cases. Proof: before the change, the 4 "ask" cases failed with no decision; after it, all 54 guard tests pass and reads, searches and `uv add` stay silent. `docs/CODING_GUIDELINES.md` General item 6: edit files with Edit and Write, not scripts.
+- Enforced: yes (guard hook, tested in the unit stage)
 
 ## 2026-10-25: STATUS claimed branch protection the plan can't provide
 - Signal: harness defect
 - What happened: `docs/STATUS.md` said `main` was protected by `scripts/protect-branch.mjs --solo`, and `docs/RULES.md` lists branch protection as what enforces "never commit straight to `main`". The repo is private on a free plan, and the protection API returns 403 ("Upgrade to GitHub Pro or make this repository public"). Earlier attempts to apply protection failed on gh not being on PATH, which hid this.
-- Improvement: rule. `docs/STATUS.md` now records the gap under Known gaps. The `docs/RULES.md` row needs a human decision: go public or upgrade, enforce with a lefthook pre-commit check on `main`, or mark it documented only. The options are drafted.
-- Enforced: documented only (needs a plan change or a protected-file change)
+- Improvement: safeguard, approved by the human. `scripts/refuse-main.mjs` runs as a lefthook pre-commit job and refuses commits on `main` once a remote exists. `docs/RULES.md` names it as the enforcement, with GitHub branch protection added once the repo is public or on GitHub Pro. `docs/STATUS.md` is corrected. Proof: `scripts/refuse-main.test.mjs` failed until `lefthook.yml` ran the check, and the script exits 1 on `main` and 0 on a feature branch.
+- Enforced: yes (lefthook pre-commit; a local hook, so CI and review remain the backstop for merges)
 
 ## 2026-10-25: Patterns that made members-and-groups tests deterministic
 - Signal: successful pattern
@@ -49,7 +49,7 @@ Entry format:
   - multi-step inside tests took `before = len(traffic.api_calls())` and asserted only the calls caused by the action under test;
   - session expiry was tested by overriding a clock dependency (`app.dependency_overrides[get_clock]`), with no sleeps;
   - the double-approval race was tested with two threads behind a `threading.Barrier`, which `BEGIN IMMEDIATE` transactions resolve to exactly one 200 and one 404.
-- Improvement: guideline, drafted for `docs/CODING_GUIDELINES.md` and awaiting approval. A note is also drafted for `docs/PROCESS.md`: MCP browser checks against `npm run dev` must open `http://localhost:5173`, because Vite listens on `localhost` (`::1`) and `127.0.0.1:5173` refused the connection.
+- Improvement: guideline, approved by the human: `docs/CODING_GUIDELINES.md` Tests (the `before` slice, clock overrides, `threading.Barrier` races). `docs/PROCESS.md` also notes that MCP browser checks against `npm run dev` must open `http://localhost:5173`, because Vite listens on `localhost` (`::1`) and `127.0.0.1:5173` refused the connection.
 - Enforced: documented only (patterns, not rules)
 
 ## 2026-10-25: Security review of members-and-groups found low-severity gaps

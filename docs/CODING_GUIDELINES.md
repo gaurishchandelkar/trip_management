@@ -7,6 +7,7 @@
 3. Avoid overly defensive code. Validate at system boundaries (HTTP input, external data) and trust internal code.
 4. Name things after the domain, for example `get_greeting`, not `process_data`.
 5. Keep the README short. No emojis in code or docs.
+6. Edit files with the Edit and Write tools, not shell scripts. The guard can only check the content of Edit and Write calls. A script that opens a file for writing before reading it empties the file, and a multi-command shell script that fails part-way leaves some of its edits applied. In tool input, `\uXXXX` is decoded to the character itself, so write a doubled backslash to get an escape in the file. *Enforced by:* the guard hook asks before shell writes to check config or with suppressions; `scripts/harness-config.test.mjs` rejects invisible characters in tracked files.
 
 ## Architecture
 
@@ -42,11 +43,13 @@ The frontend follows the same idea: components render, `api.ts` talks to the bac
 - **Integration:** `backend/tests/integration/` covers the HTTP API through all layers with `TestClient`.
 - **Functional:** `e2e/` (pytest + Playwright) drives a fresh production build of the frontend against the real backend.
   - Every user journey gets an **outside** test in `test_journeys.py`, which asserts only what the user sees.
-  - Every journey also gets an **inside** test in `test_network_contract.py`, which asserts the exact `/api/` calls through `ApiTraffic`: method, path, decoded query, status and body, with no unexpected extra calls.
+  - Every journey also gets an **inside** test in `test_network_contract.py`, which asserts the exact `/api/` calls through `ApiTraffic`: method, path, decoded query, status and body, with no unexpected extra calls. Mark it `@covers("<outside test name>")`; a journey can have several inside tests, and one inside test can cover several journeys. *Enforced by:* `scripts/harness-config.test.mjs`.
+  - In a multi-step inside test, take `before = len(traffic.api_calls())` just before the action under test and assert on `traffic.api_calls()[before:]`. Set-up calls are pinned down by their own inside tests.
   - Keep the two apart, so a contract break fails the inside test while the outside test still passes.
   - Wait for the page's initial state (the loaded session check, `GET /api/me`) before interacting, so the test never races the first request.
   - Wrap each action in `page.expect_response(...)` for the call it should cause, then assert. Don't use `networkidle`: it settles once per navigation, so it doesn't wait for calls caused by a later click. "No extra calls" covers calls made before the assertion. Never use sleeps.
 - Tests are deterministic, with no real network calls, sleeps or order dependence.
+- Make time and concurrency deterministic: inject the clock through a FastAPI dependency and override it in tests (`app.dependency_overrides`), and test races with threads started together on a `threading.Barrier`, never with sleeps.
 - Assert through public interfaces: HTTP responses, the OpenAPI schema, the rendered DOM. Never assert on framework internals.
 - Tests start the processes they verify and never reuse an already-running server. Use `127.0.0.1`, not `localhost`, because `localhost` can resolve to `::1`.
 - *Enforced by:* the 80% line and branch coverage gates in `npm run check`.

@@ -35,3 +35,7 @@ pre-commit:
 
     - name: secrets
       run: node scripts/check-secrets.mjs {staged_files}
+
+    # Branch protection needs a public repo or GitHub Pro, so main is protected locally too.
+    - name: branch
+      run: node scripts/refuse-main.mjs

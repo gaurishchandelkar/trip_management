@@ -31,6 +31,16 @@ const cases = [
   ["PowerShell", { command: "Set-Content .claude/settings.json '{}'" }, "ask"],
   ["PowerShell", { command: "Remove-Item .github\\workflows\\ci.yml" }, "ask"],
   ["PowerShell", { command: "git status; npm run check" }, null],
+  // Shell writes that would skip the content checks ask (members-and-groups retro)
+  ["Bash", { command: `python -c "open('pyproject.toml','w').write(x)"` }, "ask"],
+  ["Bash", { command: "sed -i 's/fail_under = 80/fail_under = 0/' pyproject.toml" }, "ask"],
+  ["Bash", { command: "echo 'x = 1  # noqa' >> backend/x.py" }, "ask"],
+  ["PowerShell", { command: "Set-Content package.json -Value $json" }, "ask"],
+  // Reading, searching and dependency commands stay silent
+  ["Bash", { command: 'grep -rn "type: ignore" backend' }, null],
+  ["Bash", { command: "grep -n noqa backend/x.py 2>/dev/null" }, null],
+  ["Bash", { command: "cat pyproject.toml" }, null],
+  ["Bash", { command: "uv add sqlalchemy" }, null],
   ["Read", { file_path: `${P}/.env` }, "deny"],
   ["Read", { file_path: `${P}/.env.example` }, null],
   ["Write", { file_path: `${P}/backend/x.py`, content: "x = 1  # noqa" }, "deny"],
