@@ -44,7 +44,7 @@ The frontend follows the same idea: components render, `api.ts` talks to the bac
   - Every user journey gets an **outside** test in `test_journeys.py`, which asserts only what the user sees.
   - Every journey also gets an **inside** test in `test_network_contract.py`, which asserts the exact `/api/` calls through `ApiTraffic`: method, path, decoded query, status and body, with no unexpected extra calls.
   - Keep the two apart, so a contract break fails the inside test while the outside test still passes.
-  - Wait for the page's initial state (the loaded greeting) before interacting, so the test never races the first request.
+  - Wait for the page's initial state (the loaded session check, `GET /api/me`) before interacting, so the test never races the first request.
   - Wrap each action in `page.expect_response(...)` for the call it should cause, then assert. Don't use `networkidle`: it settles once per navigation, so it doesn't wait for calls caused by a later click. "No extra calls" covers calls made before the assertion. Never use sleeps.
 - Tests are deterministic, with no real network calls, sleeps or order dependence.
 - Assert through public interfaces: HTTP responses, the OpenAPI schema, the rendered DOM. Never assert on framework internals.

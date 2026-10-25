@@ -27,6 +27,7 @@ class Call:
     query: dict[str, list[str]]
     status: int | None
     body: str | None
+    request_body: str | None
 
     @property
     def signature(self) -> Signature:
@@ -34,6 +35,9 @@ class Call:
 
     def json(self) -> object:
         return json.loads(self.body or "null")
+
+    def request_json(self) -> object:
+        return json.loads(self.request_body or "null")
 
 
 def _body(request: Request, response: Response) -> str | None:
@@ -58,6 +62,7 @@ def _call(request: Request) -> Call:
         query=parse_qs(parts.query, keep_blank_values=True),
         status=response.status if response else None,
         body=_body(request, response) if response else None,
+        request_body=request.post_data,
     )
 
 

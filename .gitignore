@@ -28,3 +28,9 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local database
+/trip.db*
+
+# Playwright MCP browser-check artifacts
+.playwright-mcp/

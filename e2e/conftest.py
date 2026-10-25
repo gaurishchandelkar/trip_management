@@ -94,7 +94,9 @@ def _build_frontend(out_dir: Path) -> None:
         pytest.fail(f"The frontend build failed:\n{result.stdout}{result.stderr}", pytrace=False)
 
 
-def _start(name: str, argv: list[str], port: int, health_path: str, log_dir: Path) -> Server:
+def _start(
+    name: str, argv: list[str], port: int, health_path: str, log_dir: Path, env: dict[str, str]
+) -> Server:
     if _port_in_use(port):
         pytest.fail(
             f"Port {port} for the {name} server is already in use. Stop whatever is listening "
@@ -109,7 +111,7 @@ def _start(name: str, argv: list[str], port: int, health_path: str, log_dir: Pat
             stdout=out,
             stderr=subprocess.STDOUT,
             # Unbuffered, so the log is complete when a hung server times out.
-            env={**os.environ, "API_PORT": str(API_PORT), "PYTHONUNBUFFERED": "1"},
+            env={**os.environ, **env, "API_PORT": str(API_PORT), "PYTHONUNBUFFERED": "1"},
         )
     server = Server(name, process, log)
     deadline = time.monotonic() + STARTUP_TIMEOUT_S
@@ -138,10 +140,19 @@ def servers(tmp_path_factory: pytest.TempPathFactory) -> Iterator[list[Server]]:
     _build_frontend(dist)
     backend = [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", HOST]
     frontend = [_node(), str(VITE), "preview", "frontend", "--outDir", str(dist), "--host", HOST]
+    # A throwaway database, so the tests never touch dev data.
+    backend_env = {"TRIP_DB_PATH": str(work / "trip.db")}
     started: list[Server] = []
     try:
         started.append(
-            _start("backend", [*backend, "--port", str(API_PORT)], API_PORT, "/api/health", work)
+            _start(
+                "backend",
+                [*backend, "--port", str(API_PORT)],
+                API_PORT,
+                "/api/health",
+                work,
+                backend_env,
+            )
         )
         started.append(
             _start(
@@ -150,6 +161,7 @@ def servers(tmp_path_factory: pytest.TempPathFactory) -> Iterator[list[Server]]:
                 WEB_PORT,
                 "/",
                 work,
+                {},
             )
         )
         yield started

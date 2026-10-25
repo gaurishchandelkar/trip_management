@@ -1,4 +1,4 @@
-# Hyper Harness
+# Trip Management
 
 A ready-to-use template for **agentic hyper productivity**: a minimal React + FastAPI app inside the Agentic Harness from
 [AI Agents in the Fast Lane: Engineering for Hyper Productivity](https://medium.com/@gaurish-chandelkar/ai-agents-in-the-fast-lane-engineering-for-hyper-productivity-fcbcd902ee9a).
