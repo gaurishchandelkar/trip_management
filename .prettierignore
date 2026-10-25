@@ -1,0 +1,4 @@
+package-lock.json
+.secrets.baseline
+docs/
+*.md

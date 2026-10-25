@@ -1,0 +1,74 @@
+[project]
+name = "hyper-harness"
+version = "0.1.0"
+description = "Hello World FastAPI backend for the hyper-productivity agent harness template"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "detect-secrets>=1.5.0",
+    "httpx2>=2.16.0",
+    "import-linter>=2.15",
+    "pip-audit>=2.10.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-playwright>=0.10.0",
+    "ruff>=0.17.2",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["frontend", "node_modules"]
+
+[tool.ruff.lint]
+# E/W/F: pycodestyle + pyflakes, I: imports, B: bugbear, UP: pyupgrade, S: bandit security,
+# SIM: simplify, N: naming, RUF: ruff-specific
+select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "N", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/**" = ["S101"]
+"e2e/**" = ["S101"]
+# Human-approved (docs/plans/PLAN_python-e2e-whitebox.md): the E2E fixture starts the servers it
+# tests. Its argv is fixed: constants, sys.executable and shutil.which("node"). No shell, no input.
+"e2e/conftest.py" = ["S603"]
+
+[tool.pyright]
+include = ["backend", "e2e"]
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+
+[tool.importlinter]
+root_package = "backend"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers: api -> services -> domain"
+type = "layers"
+layers = ["backend.main", "backend.api", "backend.services", "backend.domain"]
+
+[[tool.importlinter.contracts]]
+name = "Domain is pure: no web framework or HTTP"
+type = "forbidden"
+source_modules = ["backend.domain", "backend.services"]
+forbidden_modules = ["fastapi", "starlette", "uvicorn"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["backend/tests/*"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true

@@ -1,0 +1,16 @@
+name: Setup
+description: Install uv, Python, Node and all project dependencies
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v10.2.0
+      with:
+        enable-cache: true
+    - uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+    - run: uv sync --locked
+      shell: bash
+    - run: npm ci
+      shell: bash

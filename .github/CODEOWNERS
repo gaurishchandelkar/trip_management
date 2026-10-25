@@ -1,0 +1,12 @@
+# Replace OWNER with your GitHub user or team (scripts/init-project.mjs does this for you).
+# Harness files need an owner's review: they decide how much autonomy agents get.
+*                   @OWNER
+/.claude/           @OWNER
+/.github/           @OWNER
+/AGENTS.md          @OWNER
+/CLAUDE.md          @OWNER
+/docs/RULES.md      @OWNER
+/docs/SECURITY_GUIDELINES.md @OWNER
+/lefthook.yml       @OWNER
+/eslint.config.js   @OWNER
+/pyproject.toml     @OWNER
