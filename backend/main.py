@@ -6,7 +6,7 @@ from backend.api.routes import router
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Hyper Harness")
+    app = FastAPI(title="Trip Management")
     app.add_exception_handler(RequestValidationError, invalid_request)
     app.include_router(router)
     return app

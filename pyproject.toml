@@ -1,5 +1,5 @@
 [project]
-name = "hyper-harness"
+name = "trip-management"
 version = "0.1.0"
 description = "Hello World FastAPI backend for the hyper-productivity agent harness template"
 requires-python = ">=3.12"
