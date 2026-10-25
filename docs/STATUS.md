@@ -21,7 +21,7 @@
 
 ## In progress
 
-- None.
+- Members and groups (`docs/plans/PLAN_members-and-groups.md`): phase 1 of 5 done (SQLite storage layer via SQLAlchemy 2.x, `TRIP_DB_PATH`, import contract keeping SQLAlchemy inside `backend/storage`).
 
 ## Known gaps
 
