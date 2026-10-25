@@ -1,7 +1,7 @@
 # Plan: Members and groups
 
 Spec: `docs/specs/members-and-groups.md`
-Status: **In progress** <!-- Awaiting approval | Approved | In progress | Done -->
+Status: **Done** <!-- Awaiting approval | Approved | In progress | Done -->
 Approved: 2026-10-25 by the repo owner, in conversation.
 
 ## Approach
@@ -127,19 +127,19 @@ Success criteria:
 - Docs: `docs/SPEC.md` (product, API table, local-and-trusted-use-only warning, limits, session lifetime), `docs/STATUS.md`, `docs/TECH_STACK.md` (SQLite + SQLAlchemy 2.x, `TRIP_DB_PATH`)
 
 Success criteria:
-- [ ] Vitest: each new `api.ts` function's request and error mapping; create group shows it in My groups; browse search sends `?q=`; the request button becomes "Request pending"; the request-by-name 404 shows "No group has that name."; the owner sees Approve and Reject and they call the right endpoints; a group name and description containing markup render as text
-- [ ] Frontend coverage stays at or above 80%
-- [ ] E2E outside, two browser contexts: Ada creates `Goa <unique>`; Bob finds it by browsing and requests; Ada sees Bob's pending request and approves; Bob's group list now shows it and he sees the member list. A second journey: Carol requests by typing the name in lower case; Ada rejects; Carol sees the request button again
-- [ ] E2E inside: create group makes exactly `POST /api/groups` (201) and then `GET /api/me/groups`; browse search makes exactly `GET /api/groups?q=<term>`; request from browse makes exactly `POST /api/groups/<id>/join-requests` (201); request by name makes exactly `POST /api/join-requests` with `{"group_name": …}`; approve makes exactly `POST /api/join-requests/<id>/approve` (200) followed by `GET /api/groups/<id>`
-- [ ] Browser check with the Playwright MCP server against `npm run dev`: the two-member approve journey, keyboard only (Tab and Enter) for Bob's request
-- [ ] `docs/SPEC.md`, `docs/STATUS.md` and `docs/TECH_STACK.md` updated
-- [ ] `npm run check` passes
+- [x] Vitest: each new `api.ts` function's request and error mapping; create group shows it in My groups; browse search sends `?q=`; the request button becomes "Request pending"; the request-by-name 404 shows "No group has that name."; the owner sees Approve and Reject and they call the right endpoints; a group name and description containing markup render as text
+- [x] Frontend coverage stays at or above 80%
+- [x] E2E outside, two browser contexts: Ada creates `Goa <unique>`; Bob finds it by browsing and requests; Ada sees Bob's pending request and approves; Bob's group list now shows it and he sees the member list. A second journey: Carol requests by typing the name in lower case; Ada rejects; Carol sees the request button again
+- [x] E2E inside: create group makes exactly `POST /api/groups` (201) and then `GET /api/me/groups`; browse search makes exactly `GET /api/groups?q=<term>`; request from browse makes exactly `POST /api/groups/<id>/join-requests` (201); request by name makes exactly `POST /api/join-requests` with `{"group_name": …}`; approve makes exactly `POST /api/join-requests/<id>/approve` (200) followed by `GET /api/groups/<id>`
+- [x] Browser check with the Playwright MCP server against `npm run dev`: the two-member approve journey, keyboard only (Tab and Enter) for Bob's request
+- [x] `docs/SPEC.md`, `docs/STATUS.md` and `docs/TECH_STACK.md` updated
+- [x] `npm run check` passes
 
 ## Final verification
 
-- [ ] `npm run check` passes
-- [ ] Every acceptance criterion in the spec is covered by a test (mapping below)
-- [ ] `code-reviewer` and `security-reviewer` run before `/ship`
+- [x] `npm run check` passes
+- [x] Every acceptance criterion in the spec is covered by a test (mapping below)
+- [ ] `code-reviewer` and `security-reviewer` run before `/ship` (left for `/ship`)
 
 ### Acceptance criteria → success criteria
 
@@ -158,3 +158,11 @@ Success criteria:
 | Signed-in view: groups, create, request by name, browse | Phase 5 vitest and E2E |
 | Text never rendered as HTML | Phase 4 and Phase 5 vitest |
 | Limits, 413, 503, logging, performance | Phases 1–3 unit and integration |
+
+## Deviations from the plan
+
+- **Import contract:** "Only storage talks to the database" sets `allow_indirect_imports = true`. Without it, `services → storage → sqlalchemy` counts as a violation, which would forbid the layer the plan adds. Direct imports are still refused (negative proof re-run in phase 2). The "Domain is pure" contract now also covers `backend.storage`, which tightens it.
+- **E2E database:** `TRIP_DB_PATH` for the E2E backend landed in phase 2 instead of phase 4, so no phase ever wrote `trip.db` into the repo root.
+- **Frontend validation:** forms check input against the server's rules before sending (`frontend/src/validation.ts`), so hints can name the field. The server remains the control and its 422 still maps to a hint.
+- **E2E traffic:** `e2e/network.py` now records request bodies (`Call.request_body`), so the inside tests can assert JSON bodies and that the password is sent exactly once.
+- **Git ignore:** `.playwright-mcp/` (artifacts of the MCP browser checks) is ignored alongside `/trip.db*`.

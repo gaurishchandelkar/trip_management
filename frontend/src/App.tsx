@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getMe, type Member, SignedOutError, signOut } from "./api";
 import { alert, type Feedback, FeedbackMessage, UNAVAILABLE } from "./Feedback";
+import { Groups } from "./Groups";
 import { SignedOut } from "./SignedOut";
 
 type Session =
@@ -34,6 +35,7 @@ function SignedIn({ member, onSignedOut }: { member: Member; onSignedOut: () => 
         </button>
       </header>
       <FeedbackMessage feedback={feedback} />
+      <Groups onSignedOut={onSignedOut} />
     </>
   );
 }
@@ -53,9 +55,10 @@ export function App() {
       });
   }, []);
 
-  const signedOut = () => {
+  // Stable, because the groups views reload when it changes.
+  const signedOut = useCallback(() => {
     setSession({ status: "signed-out" });
-  };
+  }, []);
 
   return (
     <main>

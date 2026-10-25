@@ -19,3 +19,20 @@ export function isValidUserId(value: string): boolean {
 export function isValidDisplayName(value: string): boolean {
   return value.length <= DISPLAY_NAME_MAX_LENGTH && DISPLAY_NAME.test(value);
 }
+
+export const GROUP_NAME_MAX_LENGTH = 60;
+export const DESCRIPTION_MAX_LENGTH = 200;
+
+const GROUP_NAME = /^[\p{L}\p{N}][\p{L}\p{N}\-'&., ]*$/u;
+
+export const GROUP_NAME_HINT =
+  "Group names are up to 60 letters, digits, spaces and - ' & . , starting with a letter or digit, with single spaces.";
+
+export function isValidGroupName(value: string): boolean {
+  return (
+    value.length <= GROUP_NAME_MAX_LENGTH &&
+    GROUP_NAME.test(value) &&
+    !value.endsWith(" ") &&
+    !value.includes("  ")
+  );
+}

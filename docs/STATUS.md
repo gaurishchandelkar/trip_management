@@ -2,11 +2,11 @@
 
 ## Current state
 
-- **Product:** a Hello World backend and frontend with a personalised greeting (`/api/hello?name=`), with server-side allow-list validation and a generic 422 response.
+- **Product:** Trip Management members and groups (`docs/specs/members-and-groups.md`): register, sign in with a hashed session cookie (password field present but not checked yet), create groups, browse and search, ask to join from the list or by name, and owner approve or reject. SQLite storage through SQLAlchemy 2.x. The Hello World greeting is retired.
 - **Rules:** `AGENTS.md`, `CLAUDE.md`, and the `docs/` rules and templates are in place.
 - **Safeguards:**
   - ruff (including bandit rules), pyright strict, ESLint strict, Prettier and tsc
-  - import-linter layer contracts
+  - import-linter layer contracts (`api → services → storage → domain`, and SQLAlchemy only in `backend/storage`)
   - pip-audit, npm audit and detect-secrets
   - lefthook pre-commit
   - Claude Code permission rules, guard hook and format hook
@@ -21,9 +21,12 @@
 
 ## In progress
 
-- Members and groups (`docs/plans/PLAN_members-and-groups.md`): phases 1-4 of 5 done (sign-in, register and sign-out UI replace the retired Hello World greeting; SQLite storage layer via SQLAlchemy 2.x, `TRIP_DB_PATH`; register, sign-in with a hashed session cookie, sign-out, `GET /api/me`, 4 KB body limit, generic 401/409/503 bodies; groups: create, browse and search, request to join by browsing or by name, owner approve/reject, limits).
+- None.
 
 ## Known gaps
 
+- Passwords aren't checked yet (spec D1), so the app is for local, trusted use only until real authentication lands.
+- Browsing stops at 50 groups with no paging; members narrow the list with search.
+- The schema is created on startup with no migrations, so a later schema change needs a migration tool or a fresh database.
 - The guard hook only inspects command text heuristically. It's a seatbelt, not a sandbox, and CI is the backstop.
   It covers the Bash and PowerShell tools. A new shell tool must be added to `SHELL_TOOLS` in `.claude/hooks/guard.mjs`, and a test checks that `.claude/settings.json` sends each one through the guard.

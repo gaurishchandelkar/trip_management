@@ -1,13 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  approve,
+  browseGroups,
   ConflictError,
   type ConflictReason,
+  createGroup,
   ForbiddenError,
+  getGroup,
   getMe,
+  getMyGroups,
   InvalidInputError,
   NotFoundError,
   register,
+  reject,
+  requestToJoin,
+  requestToJoinByName,
   SignedOutError,
   signIn,
   signOut,
@@ -60,6 +68,88 @@ describe("members API", () => {
 
     await expect(getMe()).resolves.toEqual(ADA);
     expect(fetchMock).toHaveBeenCalledWith("/api/me", { method: "GET" });
+  });
+});
+
+describe("groups API", () => {
+  const GROUP = {
+    group_id: 1,
+    name: "Goa 2027",
+    description: "",
+    owner_display_name: "Ada",
+    member_count: 1,
+    my_status: "owner",
+  };
+  const REQUEST = { request_id: 7, group_id: 1, status: "pending" };
+
+  it("lists my groups", async () => {
+    const fetchMock = stubFetch(Response.json([GROUP]));
+
+    await expect(getMyGroups()).resolves.toEqual([GROUP]);
+    expect(fetchMock).toHaveBeenCalledWith("/api/me/groups", { method: "GET" });
+  });
+
+  it("creates a group with a JSON body", async () => {
+    const fetchMock = stubFetch(Response.json(GROUP, { status: 201 }));
+
+    await expect(createGroup("Goa 2027", "Beach")).resolves.toEqual(GROUP);
+    expect(fetchMock).toHaveBeenCalledWith("/api/groups", {
+      ...JSON_POST,
+      body: JSON.stringify({ name: "Goa 2027", description: "Beach" }),
+    });
+  });
+
+  it("browses without a search term", async () => {
+    const fetchMock = stubFetch(Response.json([]));
+
+    await browseGroups();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/groups", { method: "GET" });
+  });
+
+  it("sends the search term as an encoded query parameter", async () => {
+    const fetchMock = stubFetch(Response.json([]));
+
+    await browseGroups("Tom & Jerry");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/groups?q=Tom+%26+Jerry", { method: "GET" });
+  });
+
+  it("gets a group by ID", async () => {
+    const fetchMock = stubFetch(Response.json({ ...GROUP, members: [], pending_requests: [] }));
+
+    await getGroup(1);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/groups/1", { method: "GET" });
+  });
+
+  it("asks to join from the list with a bodiless POST", async () => {
+    const fetchMock = stubFetch(Response.json(REQUEST, { status: 201 }));
+
+    await expect(requestToJoin(1)).resolves.toEqual(REQUEST);
+    expect(fetchMock).toHaveBeenCalledWith("/api/groups/1/join-requests", { method: "POST" });
+  });
+
+  it("asks to join by name with a JSON body", async () => {
+    const fetchMock = stubFetch(Response.json(REQUEST, { status: 201 }));
+
+    await requestToJoinByName("goa 2027");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/join-requests", {
+      ...JSON_POST,
+      body: JSON.stringify({ group_name: "goa 2027" }),
+    });
+  });
+
+  it.each([
+    [approve, "approve"],
+    [reject, "reject"],
+  ])("decides a request with %O", async (decide, path) => {
+    const fetchMock = stubFetch(Response.json({ ...REQUEST, status: "approved" }));
+
+    await decide(7);
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/join-requests/7/${path}`, { method: "POST" });
   });
 });
 

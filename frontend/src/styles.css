@@ -7,5 +7,56 @@ body {
   margin: 0;
   min-height: 100vh;
   display: grid;
-  place-items: center;
+  justify-items: center;
+}
+
+main {
+  width: min(48rem, 100% - 2rem);
+  padding-block: 1rem 3rem;
+}
+
+form,
+section {
+  margin-block: 1.5rem;
+}
+
+form {
+  display: grid;
+  gap: 0.25rem;
+  max-width: 24rem;
+}
+
+form[role="search"] {
+  grid-template-columns: 1fr auto;
+  max-width: none;
+}
+
+form[role="search"] label {
+  grid-column: 1 / -1;
+}
+
+.forms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: LinkText;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+li {
+  margin-block: 0.25rem;
 }

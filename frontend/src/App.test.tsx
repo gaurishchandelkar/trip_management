@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import {
+  browseGroups,
   ConflictError,
   getMe,
+  getMyGroups,
   InvalidInputError,
   register,
   SignedOutError,
@@ -16,7 +18,9 @@ import {
 
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
+  browseGroups: vi.fn(),
   getMe: vi.fn(),
+  getMyGroups: vi.fn(),
   register: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
@@ -26,6 +30,8 @@ const ADA = { user_id: "ada", display_name: "Ada Lovelace" };
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getMyGroups).mockResolvedValue([]);
+  vi.mocked(browseGroups).mockResolvedValue([]);
 });
 
 async function renderSignedOut() {

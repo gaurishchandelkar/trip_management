@@ -103,3 +103,64 @@ export async function signOut(): Promise<void> {
 export function getMe(): Promise<Member> {
   return json("GET", "/api/me");
 }
+
+export type MembershipStatus = "owner" | "member" | "pending" | "none";
+
+export interface Group {
+  group_id: number;
+  name: string;
+  description: string;
+  owner_display_name: string;
+  member_count: number;
+  my_status: MembershipStatus;
+}
+
+export interface PendingRequest {
+  request_id: number;
+  display_name: string;
+}
+
+export interface GroupDetail extends Group {
+  /** null when the viewer may not see the list. */
+  members: Member[] | null;
+  pending_requests: PendingRequest[] | null;
+}
+
+export interface JoinRequest {
+  request_id: number;
+  group_id: number;
+  status: "pending" | "approved" | "rejected";
+}
+
+export function getMyGroups(): Promise<Group[]> {
+  return json("GET", "/api/me/groups");
+}
+
+export function createGroup(name: string, description: string): Promise<Group> {
+  return json("POST", "/api/groups", { name, description });
+}
+
+export function browseGroups(search?: string): Promise<Group[]> {
+  const query = search ? `?${new URLSearchParams({ q: search }).toString()}` : "";
+  return json("GET", `/api/groups${query}`);
+}
+
+export function getGroup(groupId: number): Promise<GroupDetail> {
+  return json("GET", `/api/groups/${String(groupId)}`);
+}
+
+export function requestToJoin(groupId: number): Promise<JoinRequest> {
+  return json("POST", `/api/groups/${String(groupId)}/join-requests`);
+}
+
+export function requestToJoinByName(groupName: string): Promise<JoinRequest> {
+  return json("POST", "/api/join-requests", { group_name: groupName });
+}
+
+export function approve(requestId: number): Promise<JoinRequest> {
+  return json("POST", `/api/join-requests/${String(requestId)}/approve`);
+}
+
+export function reject(requestId: number): Promise<JoinRequest> {
+  return json("POST", `/api/join-requests/${String(requestId)}/reject`);
+}

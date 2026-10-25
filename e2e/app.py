@@ -55,8 +55,54 @@ def register_and_sign_in(page: Page, user_id: str, display_name: str) -> None:
     load_signed_out(page)
     register(page, user_id, display_name)
     expect(form(page, "Register").get_by_role("status")).to_contain_text("Registered")
-    sign_in(page, user_id)
+    # Signing in opens the home view, which loads my groups and the browse list.
+    with (
+        page.expect_response(api("GET", "/api/me/groups")),
+        page.expect_response(api("GET", "/api/groups")),
+    ):
+        sign_in(page, user_id)
     expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+
+
+def load_home(page: Page) -> None:
+    """Opens the app with a session and waits for the session check and both home lists."""
+    with (
+        page.expect_response(api("GET", "/api/me/groups")),
+        page.expect_response(api("GET", "/api/groups")),
+    ):
+        load(page)
+    expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+
+
+def unique_group_name(prefix: str) -> str:
+    return f"{prefix} {uuid.uuid4().hex[:10]}"
+
+
+def create_group(page: Page, name: str, description: str = "") -> None:
+    create_form = form(page, "Create group")
+    create_form.get_by_label("Name").fill(name)
+    create_form.get_by_label("Description").fill(description)
+    with page.expect_response(api("GET", "/api/me/groups")):
+        create_form.get_by_role("button", name="Create group").click()
+    expect(create_form.get_by_role("status")).to_have_text(f"Created {name}.")
+
+
+def search_groups(page: Page, term: str) -> None:
+    search = page.get_by_role("search")
+    search.get_by_label("Search by name").fill(term)
+    with page.expect_response(api("GET", "/api/groups")):
+        search.get_by_role("button", name="Search").click()
+
+
+def section(page: Page, name: str) -> Locator:
+    return page.get_by_role("region", name=name)
+
+
+def open_group(page: Page, list_name: str, group_name: str) -> None:
+    """Opens a group from "My groups" or "Browse groups" and waits for its detail."""
+    with page.expect_response(lambda r: urlsplit(r.url).path.startswith("/api/groups/")):
+        section(page, list_name).get_by_role("button", name=group_name, exact=True).click()
+    expect(page.get_by_role("heading", name=group_name, level=2)).to_be_visible()
 
 
 def sign_out(page: Page) -> None:
