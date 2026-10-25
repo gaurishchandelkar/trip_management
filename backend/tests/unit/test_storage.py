@@ -172,10 +172,24 @@ def test_group_lookups_members_and_pending_requests(store: Store) -> None:
         assert tx.find_group_id("Nowhere") is None
         assert tx.group_summary(goa + 1, "ada") is None
         assert tx.group_members(goa) == (ADA,)
-        assert tx.count_members(goa) == 1
         assert tx.count_owned_groups("ada") == 1
         assert tx.count_pending_requests("bob") == 1
         assert tx.get_pending_request(request.request_id) == request
         assert [(p.request_id, p.display_name) for p in tx.pending_requests(goa)] == [
             (request.request_id, "Bob")
         ]
+
+
+def test_storage_errors_never_carry_the_bound_values(store: Store) -> None:
+    session = Session(
+        token_hash="h" * 64, user_id="ghost", expires_at=datetime(2030, 1, 1, tzinfo=UTC)
+    )
+
+    # An unknown user_id breaks the foreign key: an error nothing above storage anticipates.
+    with pytest.raises(StorageUnavailableError) as raised, store.transaction() as tx:
+        tx.add_session(session)
+
+    message = str(raised.value.__cause__)
+    assert "FOREIGN KEY" in message
+    assert "ghost" not in message
+    assert "h" * 64 not in message

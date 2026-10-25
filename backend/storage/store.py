@@ -58,15 +58,19 @@ class Store:
     def __init__(self, path: Path) -> None:
         self.path = path
         # NullPool: no connection holds the file open between requests.
+        # hide_parameters: a logged storage failure must not carry names or descriptions.
         self._engine = create_engine(
-            f"sqlite:///{path}", poolclass=NullPool, connect_args={"timeout": BUSY_TIMEOUT_S}
+            f"sqlite:///{path}",
+            poolclass=NullPool,
+            connect_args={"timeout": BUSY_TIMEOUT_S},
+            hide_parameters=True,
         )
         event.listen(self._engine, "connect", _on_connect)
         event.listen(self._engine, "begin", _on_begin)
 
     def create_schema(self) -> None:
         with self.transaction() as tx:
-            metadata.create_all(tx.connection)
+            tx.create_schema()
 
     @contextmanager
     def transaction(self) -> Generator["Transaction"]:
@@ -81,20 +85,24 @@ class Store:
 
 class Transaction:
     def __init__(self, connection: Connection) -> None:
-        self.connection = connection
+        # Private, so nothing above storage can reach SQLAlchemy through a transaction.
+        self._connection = connection
+
+    def create_schema(self) -> None:
+        metadata.create_all(self._connection)
 
     # Members
 
     def add_member(self, member: Member) -> None:
         try:
-            self.connection.execute(
+            self._connection.execute(
                 insert(members).values(user_id=member.user_id, display_name=member.display_name)
             )
         except IntegrityError as exc:
             raise UserIdTakenError from exc
 
     def get_member(self, user_id: str) -> Member | None:
-        row = self.connection.execute(
+        row = self._connection.execute(
             select(members.c.user_id, members.c.display_name).where(members.c.user_id == user_id)
         ).first()
         return Member(user_id=row.user_id, display_name=row.display_name) if row else None
@@ -102,7 +110,7 @@ class Transaction:
     # Sessions
 
     def add_session(self, session: Session) -> None:
-        self.connection.execute(
+        self._connection.execute(
             insert(sessions).values(
                 token_hash=session.token_hash,
                 user_id=session.user_id,
@@ -111,7 +119,7 @@ class Transaction:
         )
 
     def get_session(self, token_hash: str) -> Session | None:
-        row = self.connection.execute(
+        row = self._connection.execute(
             select(sessions).where(sessions.c.token_hash == token_hash)
         ).first()
         if row is None:
@@ -123,13 +131,13 @@ class Transaction:
         )
 
     def delete_session(self, token_hash: str) -> None:
-        self.connection.execute(delete(sessions).where(sessions.c.token_hash == token_hash))
+        self._connection.execute(delete(sessions).where(sessions.c.token_hash == token_hash))
 
     # Groups
 
     def add_group(self, name: str, description: str, owner_id: str) -> int:
         try:
-            group_id: int = self.connection.execute(
+            group_id: int = self._connection.execute(
                 insert(groups)
                 .values(
                     name=name, name_key=name_key(name), description=description, owner_id=owner_id
@@ -143,31 +151,31 @@ class Transaction:
 
     def count_owned_groups(self, user_id: str) -> int:
         query = select(func.count()).select_from(groups).where(groups.c.owner_id == user_id)
-        return self.connection.execute(query).scalar_one()
+        return self._connection.execute(query).scalar_one()
 
     def find_group_id(self, name: str) -> int | None:
-        return self.connection.execute(
+        return self._connection.execute(
             select(groups.c.group_id).where(groups.c.name_key == name_key(name))
         ).scalar_one_or_none()
 
     def group_summary(self, group_id: int, viewer_id: str) -> GroupSummary | None:
         query = _summaries(viewer_id).where(groups.c.group_id == group_id)
-        row = self.connection.execute(query).mappings().first()
+        row = self._connection.execute(query).mappings().first()
         return _summary(row) if row else None
 
     def browse_groups(self, viewer_id: str, search: str | None, limit: int) -> list[GroupSummary]:
         query = _summaries(viewer_id)
         if search:
             query = query.where(groups.c.name_key.contains(name_key(search), autoescape=True))
-        rows = self.connection.execute(query.order_by(groups.c.name_key).limit(limit)).mappings()
+        rows = self._connection.execute(query.order_by(groups.c.name_key).limit(limit)).mappings()
         return [_summary(row) for row in rows]
 
     def member_groups(self, user_id: str) -> list[GroupSummary]:
         query = _summaries(user_id).where(_is_member(user_id)).order_by(groups.c.name_key)
-        return [_summary(row) for row in self.connection.execute(query).mappings()]
+        return [_summary(row) for row in self._connection.execute(query).mappings()]
 
     def group_members(self, group_id: int) -> tuple[Member, ...]:
-        rows = self.connection.execute(
+        rows = self._connection.execute(
             select(members.c.user_id, members.c.display_name)
             .join(memberships, memberships.c.user_id == members.c.user_id)
             .where(memberships.c.group_id == group_id)
@@ -175,20 +183,14 @@ class Transaction:
         )
         return tuple(Member(user_id=r.user_id, display_name=r.display_name) for r in rows)
 
-    def count_members(self, group_id: int) -> int:
-        query = (
-            select(func.count()).select_from(memberships).where(memberships.c.group_id == group_id)
-        )
-        return self.connection.execute(query).scalar_one()
-
     def add_membership(self, group_id: int, user_id: str) -> None:
-        self.connection.execute(insert(memberships).values(group_id=group_id, user_id=user_id))
+        self._connection.execute(insert(memberships).values(group_id=group_id, user_id=user_id))
 
     # Join requests
 
     def add_join_request(self, group_id: int, user_id: str) -> JoinRequest:
         try:
-            request_id: int = self.connection.execute(
+            request_id: int = self._connection.execute(
                 insert(join_requests)
                 .values(group_id=group_id, user_id=user_id, status=RequestStatus.PENDING)
                 .returning(join_requests.c.request_id)
@@ -211,10 +213,10 @@ class Transaction:
                 join_requests.c.status == RequestStatus.PENDING,
             )
         )
-        return self.connection.execute(query).scalar_one()
+        return self._connection.execute(query).scalar_one()
 
     def get_pending_request(self, request_id: int) -> JoinRequest | None:
-        row = self.connection.execute(
+        row = self._connection.execute(
             select(join_requests).where(
                 join_requests.c.request_id == request_id,
                 join_requests.c.status == RequestStatus.PENDING,
@@ -230,7 +232,7 @@ class Transaction:
         )
 
     def pending_requests(self, group_id: int) -> tuple[PendingRequest, ...]:
-        rows = self.connection.execute(
+        rows = self._connection.execute(
             select(join_requests.c.request_id, members.c.display_name)
             .join(members, members.c.user_id == join_requests.c.user_id)
             .where(
@@ -245,7 +247,7 @@ class Transaction:
 
     def decide_request(self, request_id: int, status: RequestStatus) -> bool:
         """Records a decision on a pending request. False if it was already decided."""
-        result = self.connection.execute(
+        result = self._connection.execute(
             update(join_requests)
             .where(
                 join_requests.c.request_id == request_id,

@@ -101,6 +101,10 @@ def test_a_taken_group_name_is_refused_ignoring_case(signed_in: SignedIn) -> Non
         {"name": "Goa  2027"},
         {"name": "Goa_2027"},
         {"name": "<b>"},
+        {"name": "Go\u200da 2027"},
+        {"name": "Goa\ufeff"},
+        {"name": "Goa", "description": "\u202eevil"},
+        {"name": "Goa", "description": "next\x85line"},
         {"name": "-Goa"},
         {"name": "Goa", "description": "d" * 201},
         {"name": "Goa", "description": "line\nbreak"},
@@ -285,7 +289,7 @@ def test_the_owner_sees_members_and_pending_requests(signed_in: SignedIn) -> Non
 
     body = detail(ada, goa)
 
-    assert body["members"] == [{"user_id": "ada", "display_name": "Ada"}]
+    assert body["members"] == [{"display_name": "Ada"}]
     assert body["pending_requests"] == [{"request_id": request_id, "display_name": "Bob"}]
 
 
@@ -297,7 +301,7 @@ def test_a_member_sees_members_but_not_requests(signed_in: SignedIn) -> None:
 
     body = detail(bob, goa)
 
-    assert [m["user_id"] for m in body["members"]] == ["ada", "bob"]
+    assert body["members"] == [{"display_name": "Ada"}, {"display_name": "Bob"}]
     assert body["pending_requests"] is None
 
 
@@ -332,7 +336,7 @@ def test_approving_makes_the_requester_a_member(signed_in: SignedIn) -> None:
     assert response.status_code == 200
     assert response.json() == {"request_id": request_id, "group_id": goa, "status": "approved"}
     owner_view = detail(ada, goa)
-    assert [m["user_id"] for m in owner_view["members"]] == ["ada", "bob"]
+    assert [m["display_name"] for m in owner_view["members"]] == ["Ada", "Bob"]
     assert owner_view["pending_requests"] == []
     assert detail(bob, goa)["my_status"] == "member"
 
@@ -395,6 +399,8 @@ def test_concurrent_approvals_create_one_membership(app: FastAPI, signed_in: Sig
         thread.start()
     for thread in threads:
         thread.join()
+    for tab in tabs:
+        tab.close()
 
     assert sorted(statuses) == [200, 404]
     assert detail(ada, goa)["member_count"] == 2

@@ -13,6 +13,23 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-25: Security review of members-and-groups found low-severity gaps
+- Signal: security issue
+- What happened: `security-reviewer` found nothing blocking on `feat/members-and-groups`, but six low-severity issues for a local, trusted app whose passwords aren't checked yet (spec D1):
+  1. An owner sees only a display name on a pending request, and display names aren't unique, so an impostor can be approved.
+  2. Member lists returned co-members' user IDs, and under D1 a user ID is enough to sign in.
+  3. Storage failures logged SQL bound values (names, descriptions) through the chained `DBAPIError`.
+  4. Zero-width, direction-override and C1 characters were accepted in names and descriptions, allowing look-alike group names.
+  5. `SameSite=Strict` doesn't stop form posts from other `localhost` ports, and the bodiless POST routes (join by ID, approve, reject, sign-out) accept them.
+  6. Every sign-in adds a session row, and expired rows are only removed when presented, so the table grows without limit.
+- Improvement: safeguard, for findings 2–4 in the same branch:
+  - members are returned by display name only (`MemberNameResponse`)
+  - `create_engine(..., hide_parameters=True)`, tested by `test_storage_errors_never_carry_the_bound_values`
+  - every free-text field refuses Unicode categories Cf and Cc, with integration cases for U+200D, U+FEFF, U+202E and U+0085
+
+  Findings 1, 5 and 6 are deferred to the real-authentication spec. Proposed safeguards: unique, normalised display names, or a stable identifier on each pending request (1); an `Origin`/`Sec-Fetch-Site` check on unsafe methods, with a test that walks `app.routes` and sends a cross-origin form post to every POST (5); purging expired sessions at sign-in and capping live sessions per member (6).
+- Enforced: yes for 2–4 (integration and unit tests). Documented only for 1, 5 and 6 (out of scope until passwords are checked).
+
 ## 2026-10-25: Branch protection locked out a solo maintainer
 - Signal: harness defect
 - What happened: PR #6 (python-e2e-whitebox) couldn't be merged. The human's ruleset required 1 approval, and GitHub doesn't let you approve your own PR. `scripts/protect-branch.mjs` would have done the same: it required a code owner review and applied it to admins too. The human set approvals to 0, but the ruleset still had no required status checks, so a red PR could have been merged.

@@ -120,9 +120,14 @@ export interface PendingRequest {
   display_name: string;
 }
 
+/** Co-members are shown by name only: until passwords are checked, a user ID signs you in. */
+export interface GroupMember {
+  display_name: string;
+}
+
 export interface GroupDetail extends Group {
   /** null when the viewer may not see the list. */
-  members: Member[] | null;
+  members: GroupMember[] | null;
   pending_requests: PendingRequest[] | null;
 }
 

@@ -59,6 +59,8 @@ def test_register_stores_user_ids_lower_case(client: TestClient) -> None:
         {"user_id": "ada", "display_name": "A" * 51},
         {"user_id": "ada", "display_name": ""},
         {"user_id": "ada", "display_name": "<b>Ada</b>"},
+        {"user_id": "ada", "display_name": "A\u200dda"},
+        {"user_id": "ada", "display_name": "Ada\u202e"},
         {"user_id": "ada"},
         {"user_id": "ada", "display_name": "Ada", "is_admin": True},
         {"user_id": 123, "display_name": "Ada"},

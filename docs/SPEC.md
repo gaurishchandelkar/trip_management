@@ -18,12 +18,12 @@ Trip Management for friends. Members register, sign in, and organise themselves 
 - Members browse groups, optionally searching by part of the name (ignoring case). Browsing returns at most 50 groups, sorted by name.
 - A member asks to join from the browse list or by typing a group's exact name (ignoring case). Either way the request waits for the owner.
 - Only the owner sees pending requests, and only the owner can approve or reject them. Approved requesters become members; rejected ones can ask again.
-- Members see a group's member list. Non-members see only its name, description, owner and member count.
+- Members see a group's member list, by display name only. Non-members see only its name, description, owner and member count.
 - **Limits:** a group has at most 50 members, a member owns at most 20 groups, and a member has at most 20 pending requests.
 
 ## Backend API
 
-Bodies are JSON and unknown fields are refused. Every route except the first three needs a session cookie.
+Bodies are JSON and unknown fields are refused. Text fields refuse invisible format characters (such as zero-width joiners and direction overrides) and control characters. Every route except the first three needs a session cookie.
 
 | Method | Path | Success |
 |---|---|---|
@@ -35,7 +35,7 @@ Bodies are JSON and unknown fields are refused. Every route except the first thr
 | GET | `/api/me/groups` | `200 [group]`, the groups I own or belong to |
 | POST | `/api/groups` `{name, description?}` | `201 group` |
 | GET | `/api/groups?q=` | `200 [group]`, at most 50, sorted by name |
-| GET | `/api/groups/{group_id}` | `200 group` plus `members` (members only) and `pending_requests` (owner only), otherwise `null` |
+| GET | `/api/groups/{group_id}` | `200 group` plus `members` as `[{display_name}]` (members only) and `pending_requests` (owner only), otherwise `null` |
 | POST | `/api/groups/{group_id}/join-requests` | `201 {request_id, group_id, status}` |
 | POST | `/api/join-requests` `{group_name}` | `201 {request_id, group_id, status}` |
 | POST | `/api/join-requests/{request_id}/approve` | `200 {request_id, group_id, status}` |

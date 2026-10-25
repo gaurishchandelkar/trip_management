@@ -298,7 +298,7 @@ describe("group detail", () => {
   it("shows the owner the members and pending requests", async () => {
     await open(
       detail({
-        members: [{ user_id: "ada", display_name: "Ada" }],
+        members: [{ display_name: "Ada" }],
         pending_requests: [{ request_id: 7, display_name: "Bob" }],
       }),
     );
@@ -419,7 +419,7 @@ describe("rendering untrusted text", () => {
       detail({
         name: markup,
         description: markup,
-        members: [{ user_id: "eve", display_name: markup }],
+        members: [{ display_name: markup }],
         pending_requests: [{ request_id: 7, display_name: markup }],
       }),
     );

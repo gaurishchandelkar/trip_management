@@ -1,3 +1,4 @@
+import unicodedata
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
@@ -22,8 +23,20 @@ UserId = Annotated[
     StringConstraints(min_length=3, max_length=30, pattern=USER_ID_PATTERN),
     AfterValidator(str.lower),
 ]
+
+
+def _no_hidden_characters(value: str) -> str:
+    # Format characters (zero-width joiners, direction overrides) and control characters are
+    # invisible or reorder text, so they could make a name look like another one.
+    if any(unicodedata.category(char) in {"Cf", "Cc"} for char in value):
+        raise ValueError
+    return value
+
+
 DisplayName = Annotated[
-    str, StringConstraints(min_length=1, max_length=NAME_MAX_LENGTH, pattern=NAME_PATTERN)
+    str,
+    StringConstraints(min_length=1, max_length=NAME_MAX_LENGTH, pattern=NAME_PATTERN),
+    AfterValidator(_no_hidden_characters),
 ]
 Password = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
@@ -57,8 +70,6 @@ GROUP_NAME_PATTERN = r"^[^\W_](?:[^\W_]|[-'&., ])*$"
 GROUP_NAME_CHARS_PATTERN = r"^(?:[^\W_]|[-'&., ])+$"
 GROUP_NAME_MAX_LENGTH = 60
 DESCRIPTION_MAX_LENGTH = 200
-# No control characters, line breaks included.
-DESCRIPTION_PATTERN = r"^[^\x00-\x1f\x7f]*$"
 
 
 def _single_spaced(value: str) -> str:
@@ -72,9 +83,13 @@ GroupName = Annotated[
     str,
     StringConstraints(min_length=1, max_length=GROUP_NAME_MAX_LENGTH, pattern=GROUP_NAME_PATTERN),
     AfterValidator(_single_spaced),
+    AfterValidator(_no_hidden_characters),
 ]
+# Line breaks are control characters too, so a description is a single line.
 Description = Annotated[
-    str, StringConstraints(max_length=DESCRIPTION_MAX_LENGTH, pattern=DESCRIPTION_PATTERN)
+    str,
+    StringConstraints(max_length=DESCRIPTION_MAX_LENGTH),
+    AfterValidator(_no_hidden_characters),
 ]
 
 
@@ -107,6 +122,11 @@ class GroupResponse(BaseModel):
         )
 
 
+class MemberNameResponse(BaseModel):
+    # No user_id: until passwords are checked (spec D1), a user ID is enough to sign in.
+    display_name: str
+
+
 class PendingRequestResponse(BaseModel):
     request_id: int
     display_name: str
@@ -114,7 +134,7 @@ class PendingRequestResponse(BaseModel):
 
 class GroupDetailResponse(GroupResponse):
     # null when the viewer may not see the list.
-    members: list[MemberResponse] | None
+    members: list[MemberNameResponse] | None
     pending_requests: list[PendingRequestResponse] | None
 
     @classmethod
@@ -123,7 +143,9 @@ class GroupDetailResponse(GroupResponse):
         pending = detail.pending_requests
         return cls(
             **GroupResponse.of(detail.summary).model_dump(),
-            members=None if members is None else [MemberResponse.of(m) for m in members],
+            members=None
+            if members is None
+            else [MemberNameResponse(display_name=m.display_name) for m in members],
             pending_requests=None
             if pending is None
             else [

@@ -114,8 +114,9 @@ export function GroupView({ groupId, onBack, onSignedOut }: GroupViewProps) {
             <section aria-labelledby="members-heading">
               <h3 id="members-heading">Members</h3>
               <ul>
-                {loaded.group.members.map((member) => (
-                  <li key={member.user_id}>{member.display_name}</li>
+                {loaded.group.members.map((member, position) => (
+                  // Display names can repeat and there's no ID, so the position is the key.
+                  <li key={position}>{member.display_name}</li>
                 ))}
               </ul>
             </section>

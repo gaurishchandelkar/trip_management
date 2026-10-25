@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   browseGroups,
@@ -260,19 +260,18 @@ export function Groups({ onSignedOut }: GroupsProps) {
   // Bumped when returning from a group, so the home lists show what changed there.
   const [visit, setVisit] = useState(0);
 
-  function failed(error: unknown) {
-    if (error instanceof SignedOutError) onSignedOut();
-    else setFeedback(alert(messageFor(error)));
-  }
-
-  useEffect(() => {
-    const fail = (error: unknown) => {
+  const failed = useCallback(
+    (error: unknown) => {
       if (error instanceof SignedOutError) onSignedOut();
       else setFeedback(alert(messageFor(error)));
-    };
-    getMyGroups().then(setMyGroups).catch(fail);
-    browseGroups().then(setBrowsed).catch(fail);
-  }, [onSignedOut, visit]);
+    },
+    [onSignedOut],
+  );
+
+  useEffect(() => {
+    getMyGroups().then(setMyGroups).catch(failed);
+    browseGroups().then(setBrowsed).catch(failed);
+  }, [failed, visit]);
 
   function browse(search: string) {
     if (search !== "" && !isValidGroupName(search)) {

@@ -235,9 +235,10 @@ def test_request_by_name_posts_the_name_once(
     assert _json_object(calls[0])["status"] == "pending"
 
 
-def test_approve_posts_once_then_reloads_the_group(
+def _owner_with_pending_request(
     page: Page, other_page: Page, traffic: ApiTraffic
-) -> None:
+) -> tuple[object, object]:
+    """The page's member owns a group that Bob (in other_page) asked to join; it's open."""
     name = _owned_group(page)
     register_and_sign_in(other_page, unique_user_id("bob"), "Bob")
     search_groups(other_page, name)
@@ -246,29 +247,95 @@ def test_approve_posts_once_then_reloads_the_group(
             "button", name=f"Request to join {name}"
         ).click()
     open_group(page, "My groups", name)
-    opened = traffic.api_calls()[-1]
-    group_id = _json_object(opened)["group_id"]
-    pending = _json_object(opened)["pending_requests"]
+    opened = _json_object(traffic.api_calls()[-1])
+    pending = opened["pending_requests"]
     assert isinstance(pending, list)
-    request_id = cast(list[dict[str, object]], pending)[0]["request_id"]
+    return opened["group_id"], cast(list[dict[str, object]], pending)[0]["request_id"]
+
+
+@pytest.mark.parametrize(
+    ("decision", "button", "status", "member_count"),
+    [("approve", "Approve Bob", "approved", 2), ("reject", "Reject Bob", "rejected", 1)],
+)
+def test_decision_posts_once_then_reloads_the_group(
+    page: Page,
+    other_page: Page,
+    traffic: ApiTraffic,
+    decision: str,
+    button: str,
+    status: str,
+    member_count: int,
+) -> None:
+    group_id, request_id = _owner_with_pending_request(page, other_page, traffic)
     before = len(traffic.api_calls())
 
     with page.expect_response(api("GET", f"/api/groups/{group_id}")):
-        section(page, "Pending requests").get_by_role("button", name="Approve Bob").click()
-    expect(section(page, "Members")).to_contain_text("Bob")
+        section(page, "Pending requests").get_by_role("button", name=button).click()
+    expect(section(page, "Pending requests")).to_contain_text("No pending requests.")
 
     calls = traffic.api_calls()[before:]
-    approve_path = f"/api/join-requests/{request_id}/approve"
     assert [call.signature for call in calls] == [
-        ("POST", approve_path, {}),
+        ("POST", f"/api/join-requests/{request_id}/{decision}", {}),
         ("GET", f"/api/groups/{group_id}", {}),
     ], traffic.describe()
     assert (calls[0].status, calls[0].request_body) == (200, None)
     assert _json_object(calls[0]) == {
         "request_id": request_id,
         "group_id": group_id,
-        "status": "approved",
+        "status": status,
     }
     reloaded = _json_object(calls[1])
-    assert reloaded["member_count"] == 2
+    assert reloaded["member_count"] == member_count
     assert reloaded["pending_requests"] == []
+
+
+def test_taken_user_id_gets_one_generic_409(page: Page, traffic: ApiTraffic) -> None:
+    user_id = unique_user_id("ada")
+    load_signed_out(page)
+    register(page, user_id, "Ada")
+    expect(form(page, "Register").get_by_role("status")).to_be_visible()
+
+    register(page, user_id.upper(), "Other")
+    expect(form(page, "Register").get_by_role("alert")).to_be_visible()
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls] == [ME, REGISTER, REGISTER], traffic.describe()
+    assert calls[2].request_json() == {"user_id": user_id.upper(), "display_name": "Other"}
+    assert (calls[2].status, calls[2].json()) == (409, {"detail": "User ID already taken"})
+
+
+def test_unknown_group_name_gets_one_404_and_no_reload(page: Page, traffic: ApiTraffic) -> None:
+    name = unique_group_name("Nowhere")
+    register_and_sign_in(page, unique_user_id("bob"), "Bob")
+    before = len(traffic.api_calls())
+    by_name = form(page, "Request to join")
+    by_name.get_by_label("Group name").fill(name)
+
+    with page.expect_response(api("POST", "/api/join-requests")):
+        by_name.get_by_role("button", name="Send request").click()
+    expect(by_name.get_by_role("alert")).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [("POST", "/api/join-requests", {})], (
+        traffic.describe()
+    )
+    assert calls[0].request_json() == {"group_name": name}
+    assert (calls[0].status, calls[0].json()) == (404, {"detail": "Not found"})
+
+
+def test_taken_group_name_gets_one_409_and_no_reload(page: Page, traffic: ApiTraffic) -> None:
+    name = unique_group_name("Goa")
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    create_group(page, name)
+    before = len(traffic.api_calls())
+    create_form = form(page, "Create group")
+    create_form.get_by_label("Name").fill(name.upper())
+
+    with page.expect_response(api("POST", "/api/groups")):
+        create_form.get_by_role("button", name="Create group").click()
+    expect(create_form.get_by_role("alert")).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [CREATE], traffic.describe()
+    assert calls[0].request_json() == {"name": name.upper(), "description": ""}
+    assert (calls[0].status, calls[0].json()) == (409, {"detail": "Group name already taken"})
