@@ -92,16 +92,16 @@ Success criteria:
 - Group detail returns `members` only when the actor is a member or owner, and `pending_requests` (request ID, requester display name) only for the owner
 
 Success criteria:
-- [ ] Integration tests (`backend/tests/integration/test_groups.py`): create `Goa 2027` → `201` with `my_status: "owner"` and `member_count: 1`; create `goa 2027` → `409 {"detail": "Group name already taken"}`; names `""`, 61 chars, `" Goa"`, `"Goa  2027"`, `Goa_2027`, `<b>`; a 201-char description → `422`
-- [ ] Integration tests: browse lists name, owner display name, member count and the caller's status for owner, member, pending and none; `?q=goa` returns only names containing "goa" in any case; 60 groups → 50 returned, sorted by name
-- [ ] Integration tests: request by ID → `201 pending`, and browse then shows `pending`; again → `409 {"detail": "Request already pending"}`; owner or member requesting → `409 {"detail": "Already a member"}`; request by name `goa 2027` → `201` for `Goa 2027`; unknown name or group ID → `404 {"detail": "Not found"}`
-- [ ] Integration tests: owner's detail lists pending requests with display names; approve → the requester appears in members, `my_status: "member"`, request no longer pending; reject → not a member, may request again (`201`); a member's detail shows members but no pending requests; a non-member's detail shows neither
-- [ ] Integration tests: a non-owner approving or rejecting → `403 {"detail": "Forbidden"}` and nothing changes; an unknown or already-decided request → `404`; two approvals of the same request from two threads → one `200`, one `404`, exactly one membership
-- [ ] Integration tests: the 21st owned group, 21st pending request, and approving into a 50-member group → `409 {"detail": "Limit reached"}`
-- [ ] Integration tests: every Phase 3 route without a cookie → `401`
-- [ ] Integration test: with 1,000 members and 1,000 groups seeded, browse, search and group detail each answer in under 200 ms
-- [ ] Unit tests cover the service rules above against a `tmp_path` database, and backend unit coverage stays at or above 80%
-- [ ] `npm run check -- lint unit integration architecture` passes
+- [x] Integration tests (`backend/tests/integration/test_groups.py`): create `Goa 2027` → `201` with `my_status: "owner"` and `member_count: 1`; create `goa 2027` → `409 {"detail": "Group name already taken"}`; names `""`, 61 chars, `" Goa"`, `"Goa  2027"`, `Goa_2027`, `<b>`; a 201-char description → `422`
+- [x] Integration tests: browse lists name, owner display name, member count and the caller's status for owner, member, pending and none; `?q=goa` returns only names containing "goa" in any case; 60 groups → 50 returned, sorted by name
+- [x] Integration tests: request by ID → `201 pending`, and browse then shows `pending`; again → `409 {"detail": "Request already pending"}`; owner or member requesting → `409 {"detail": "Already a member"}`; request by name `goa 2027` → `201` for `Goa 2027`; unknown name or group ID → `404 {"detail": "Not found"}`
+- [x] Integration tests: owner's detail lists pending requests with display names; approve → the requester appears in members, `my_status: "member"`, request no longer pending; reject → not a member, may request again (`201`); a member's detail shows members but no pending requests; a non-member's detail shows neither
+- [x] Integration tests: a non-owner approving or rejecting → `403 {"detail": "Forbidden"}` and nothing changes; an unknown or already-decided request → `404`; two approvals of the same request from two threads → one `200`, one `404`, exactly one membership
+- [x] Integration tests: the 21st owned group, 21st pending request, and approving into a 50-member group → `409 {"detail": "Limit reached"}`
+- [x] Integration tests: every Phase 3 route without a cookie → `401`
+- [x] Integration test: with 1,000 members and 1,000 groups seeded, browse, search and group detail each answer in under 200 ms
+- [x] Unit tests cover the service rules above against a `tmp_path` database, and backend unit coverage stays at or above 80%
+- [x] `npm run check -- lint unit integration architecture` passes
 
 ## Phase 4: Sign-in UI, retire the greeting
 

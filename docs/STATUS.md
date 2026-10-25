@@ -21,7 +21,7 @@
 
 ## In progress
 
-- Members and groups (`docs/plans/PLAN_members-and-groups.md`): phases 1-2 of 5 done (SQLite storage layer via SQLAlchemy 2.x, `TRIP_DB_PATH`; register, sign-in with a hashed session cookie, sign-out, `GET /api/me`, 4 KB body limit, generic 401/409/503 bodies).
+- Members and groups (`docs/plans/PLAN_members-and-groups.md`): phases 1-3 of 5 done (SQLite storage layer via SQLAlchemy 2.x, `TRIP_DB_PATH`; register, sign-in with a hashed session cookie, sign-out, `GET /api/me`, 4 KB body limit, generic 401/409/503 bodies; groups: create, browse and search, request to join by browsing or by name, owner approve/reject, limits).
 
 ## Known gaps
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from backend.api import members
+from backend.api import groups, members
 from backend.api.body_limit import BodySizeLimit
 from backend.api.errors import domain_error, invalid_request
 from backend.api.routes import router
@@ -37,6 +37,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     app.add_exception_handler(DomainError, domain_error)
     app.include_router(router)
     app.include_router(members.router)
+    app.include_router(groups.router)
     return app
 
 
