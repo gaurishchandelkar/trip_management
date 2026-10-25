@@ -6,8 +6,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from backend.api.errors import invalid_request
+from backend.api import members
+from backend.api.body_limit import BodySizeLimit
+from backend.api.errors import domain_error, invalid_request
 from backend.api.routes import router
+from backend.domain.errors import DomainError
 from backend.storage.store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,8 +32,11 @@ def create_app(db_path: Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Trip Management", lifespan=lifespan)
     app.state.store = store
+    app.add_middleware(BodySizeLimit)
     app.add_exception_handler(RequestValidationError, invalid_request)
+    app.add_exception_handler(DomainError, domain_error)
     app.include_router(router)
+    app.include_router(members.router)
     return app
 
 

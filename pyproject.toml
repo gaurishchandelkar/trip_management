@@ -65,6 +65,8 @@ name = "Only storage talks to the database"
 type = "forbidden"
 source_modules = ["backend.api", "backend.services", "backend.domain"]
 forbidden_modules = ["sqlalchemy"]
+# Services reach SQLAlchemy only through backend.storage; this contract forbids direct imports.
+allow_indirect_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]

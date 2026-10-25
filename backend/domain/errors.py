@@ -40,3 +40,7 @@ class UnauthenticatedError(DomainError):
 
 class StorageUnavailableError(DomainError):
     pass
+
+
+class InvalidCredentialsError(UnauthenticatedError):
+    pass

@@ -3,11 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
+from backend.api.schemas import NAME_MAX_LENGTH, NAME_PATTERN
 from backend.services.greeting import get_greeting
-
-# Letters (any script), optionally joined by single spaces, hyphens or apostrophes.
-NAME_PATTERN = r"^[^\W\d_]+(?:[ '\-][^\W\d_]+)*$"
-NAME_MAX_LENGTH = 50
 
 router = APIRouter(prefix="/api")
 

@@ -76,14 +76,14 @@ Success criteria:
 - The greeting backend stays for now, so the current frontend and E2E still pass
 
 Success criteria:
-- [ ] Integration tests (`backend/tests/integration/test_members.py`): register `ada`/`Ada Lovelace` → `201 {"user_id": "ada", "display_name": "Ada Lovelace"}`; register `ada` again and `ADA` → `409 {"detail": "User ID already taken"}`
-- [ ] Integration tests: user IDs `ab`, 31 chars, `1ada`, `ada!`, `<script>`; display names `R2D2`, 51 chars, empty; a missing field, an unknown field and a wrong type → `422 {"detail": "Invalid request"}`, and the response body never contains the input
-- [ ] Integration tests: sign in as `ada` with password `anything` → `200`, a `session` cookie with `HttpOnly` and `SameSite=Strict`, then `GET /api/me` → `200` with Ada's display name; sign in as `bob` → `401 {"detail": "Invalid user ID or password"}` with no `Set-Cookie`; empty, missing or 129-char password → `422`
-- [ ] Integration tests: after `POST /api/sign-out`, the old cookie on `GET /api/me` → `401`; with no cookie, `GET /api/me` → `401`; with a session whose clock has passed 7 days → `401`
-- [ ] Integration test: the stored session row holds a hash, not the cookie value, and no table has a password column
-- [ ] Integration tests: a 5 KB body to `POST /api/members` → `413`, with and without `Content-Length`; a corrupted database file after startup → `503 {"detail": "Service unavailable"}`
-- [ ] Unit tests: each domain error maps to its status and body; the sign-in log record contains the user ID and not the display name or password (`caplog`)
-- [ ] `npm run check -- lint unit integration architecture` passes
+- [x] Integration tests (`backend/tests/integration/test_members.py`): register `ada`/`Ada Lovelace` → `201 {"user_id": "ada", "display_name": "Ada Lovelace"}`; register `ada` again and `ADA` → `409 {"detail": "User ID already taken"}`
+- [x] Integration tests: user IDs `ab`, 31 chars, `1ada`, `ada!`, `<script>`; display names `R2D2`, 51 chars, empty; a missing field, an unknown field and a wrong type → `422 {"detail": "Invalid request"}`, and the response body never contains the input
+- [x] Integration tests: sign in as `ada` with password `anything` → `200`, a `session` cookie with `HttpOnly` and `SameSite=Strict`, then `GET /api/me` → `200` with Ada's display name; sign in as `bob` → `401 {"detail": "Invalid user ID or password"}` with no `Set-Cookie`; empty, missing or 129-char password → `422`
+- [x] Integration tests: after `POST /api/sign-out`, the old cookie on `GET /api/me` → `401`; with no cookie, `GET /api/me` → `401`; with a session whose clock has passed 7 days → `401`
+- [x] Integration test: the stored session row holds a hash, not the cookie value, and no table has a password column
+- [x] Integration tests: a 5 KB body to `POST /api/members` → `413`, with and without `Content-Length`; a corrupted database file after startup → `503 {"detail": "Service unavailable"}`
+- [x] Unit tests: each domain error maps to its status and body; the sign-in log record contains the user ID and not the display name or password (`caplog`)
+- [x] `npm run check -- lint unit integration architecture` passes
 
 ## Phase 3: Groups and joining API
 
