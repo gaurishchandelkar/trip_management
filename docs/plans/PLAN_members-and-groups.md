@@ -112,13 +112,13 @@ Success criteria:
 - `docs/CODING_GUIDELINES.md`: the initial state to wait for becomes the loaded session check
 
 Success criteria:
-- [ ] Vitest: each `api.ts` function sends the right method, path and JSON body and maps each status to its error; `App` shows the signed-out forms with labels, registers then signs in, shows the display name, signs out, returns to sign-in on a `SignedOutError`, and shows the 503 message
-- [ ] Vitest: a display name of `<img src=x onerror=alert(1)>` returned by the API renders as literal text and creates no `img` element
-- [ ] E2E outside (`test_journeys.py`): register, sign in and see the display name; sign out and see the sign-in form; sign in as an unregistered ID and see the error; the password field has `type="password"` and the "aren't checked yet" note is visible
-- [ ] E2E inside (`test_network_contract.py`): page load makes exactly `GET /api/me` (401); register makes exactly `POST /api/members` (201); sign-in makes exactly `POST /api/sign-in` (200) and the password never appears in any later request; sign-out makes exactly `POST /api/sign-out` (204)
-- [ ] `create_app().openapi()` no longer contains `/api/hello`; `rg -i "hello|greeting" backend frontend/src e2e` finds nothing
-- [ ] Browser check with the Playwright MCP server against `npm run dev`: register, sign in, reload (still signed in), sign out
-- [ ] `npm run check` passes
+- [x] Vitest: each `api.ts` function sends the right method, path and JSON body and maps each status to its error; `App` shows the signed-out forms with labels, registers then signs in, shows the display name, signs out, returns to sign-in on a `SignedOutError`, and shows the 503 message
+- [x] Vitest: a display name of `<img src=x onerror=alert(1)>` returned by the API renders as literal text and creates no `img` element
+- [x] E2E outside (`test_journeys.py`): register, sign in and see the display name; sign out and see the sign-in form; sign in as an unregistered ID and see the error; the password field has `type="password"` and the "aren't checked yet" note is visible
+- [x] E2E inside (`test_network_contract.py`): page load makes exactly `GET /api/me` (401); register makes exactly `POST /api/members` (201); sign-in makes exactly `POST /api/sign-in` (200) and the password never appears in any later request; sign-out makes exactly `POST /api/sign-out` (204)
+- [x] `create_app().openapi()` no longer contains `/api/hello`; `rg -i "hello|greeting" backend frontend/src e2e` finds nothing
+- [x] Browser check with the Playwright MCP server against `npm run dev`: register, sign in, reload (still signed in), sign out
+- [x] `npm run check` passes
 
 ## Phase 5: Groups UI and docs
 

@@ -1,66 +1,77 @@
 import { useEffect, useState } from "react";
 
-import { fetchGreeting, InvalidNameError } from "./api";
+import { getMe, type Member, SignedOutError, signOut } from "./api";
+import { alert, type Feedback, FeedbackMessage, UNAVAILABLE } from "./Feedback";
+import { SignedOut } from "./SignedOut";
 
-export const NAME_MAX_LENGTH = 50;
-
-type State =
+type Session =
   | { status: "loading" }
-  | { status: "ready"; message: string }
-  | { status: "invalid" }
-  | { status: "error"; error: string };
+  | { status: "signed-out" }
+  | { status: "signed-in"; member: Member }
+  | { status: "unavailable" };
 
-function loadGreeting(setState: (state: State) => void, name?: string) {
-  setState({ status: "loading" });
-  fetchGreeting(name)
-    .then((greeting) => {
-      setState({ status: "ready", message: greeting.message });
-    })
-    .catch((error: unknown) => {
-      setState(
-        error instanceof InvalidNameError
-          ? { status: "invalid" }
-          : { status: "error", error: String(error) },
-      );
-    });
+function SignedIn({ member, onSignedOut }: { member: Member; onSignedOut: () => void }) {
+  const [feedback, setFeedback] = useState<Feedback>(null);
+
+  return (
+    <>
+      <header>
+        <p>
+          Signed in as <strong>{member.display_name}</strong>
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            signOut()
+              .then(onSignedOut)
+              .catch((error: unknown) => {
+                if (error instanceof SignedOutError) onSignedOut();
+                else setFeedback(alert(UNAVAILABLE));
+              });
+          }}
+        >
+          Sign out
+        </button>
+      </header>
+      <FeedbackMessage feedback={feedback} />
+    </>
+  );
 }
 
 export function App() {
-  const [state, setState] = useState<State>({ status: "loading" });
-  const [name, setName] = useState("");
+  const [session, setSession] = useState<Session>({ status: "loading" });
 
   useEffect(() => {
-    loadGreeting(setState);
+    getMe()
+      .then((member) => {
+        setSession({ status: "signed-in", member });
+      })
+      .catch((error: unknown) => {
+        setSession(
+          error instanceof SignedOutError ? { status: "signed-out" } : { status: "unavailable" },
+        );
+      });
   }, []);
+
+  const signedOut = () => {
+    setSession({ status: "signed-out" });
+  };
 
   return (
     <main>
-      {state.status === "loading" && <p>Loading…</p>}
-      {state.status === "ready" && <h1>{state.message}</h1>}
-      {state.status === "invalid" && (
-        <p role="alert">
-          Please enter a valid name (letters, spaces, hyphens and apostrophes, up to{" "}
-          {NAME_MAX_LENGTH} characters).
-        </p>
-      )}
-      {state.status === "error" && <p role="alert">Could not load greeting: {state.error}</p>}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          loadGreeting(setState, name.trim());
-        }}
-      >
-        <label htmlFor="name">Your name</label>{" "}
-        <input
-          id="name"
-          value={name}
-          maxLength={NAME_MAX_LENGTH}
-          onChange={(event) => {
-            setName(event.target.value);
+      <h1>Trip Management</h1>
+      {session.status === "loading" && <p>Loading…</p>}
+      {session.status === "unavailable" && <p role="alert">{UNAVAILABLE}</p>}
+      {session.status === "signed-out" && (
+        <SignedOut
+          onSignedIn={(member) => {
+            setSession({ status: "signed-in", member });
           }}
-        />{" "}
-        <button type="submit">Greet</button>
-      </form>
+        />
+      )}
+      {session.status === "signed-in" && (
+        <SignedIn member={session.member} onSignedOut={signedOut} />
+      )}
     </main>
   );
 }

@@ -31,3 +31,6 @@ Thumbs.db
 
 # Local database
 /trip.db*
+
+# Playwright MCP browser-check artifacts
+.playwright-mcp/
