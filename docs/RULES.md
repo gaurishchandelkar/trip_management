@@ -23,7 +23,7 @@ Where a rule can be enforced, it's enforced by a tool and not just written here.
 | Every change ships with tests | Coverage gates (80%) in `npm run check` |
 | Tests never call external networks or paid APIs | Code review, stub/fake dependencies |
 | Run `npm run check` before handing over | Pre-commit hook (fast stages), CI (all stages) |
-| Never commit straight to `main` once a remote exists | Branch protection |
+| Never commit straight to `main` once a remote exists | lefthook pre-commit (`scripts/refuse-main.mjs`); GitHub branch protection once the repo is public or on GitHub Pro |
 
 ## Stop and ask when
 

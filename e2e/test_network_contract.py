@@ -26,7 +26,7 @@ from e2e.app import (
     unique_group_name,
     unique_user_id,
 )
-from e2e.network import ApiTraffic, Call, Signature
+from e2e.network import ApiTraffic, Call, Signature, covers
 
 ME: Signature = ("GET", "/api/me", {})
 REGISTER: Signature = ("POST", "/api/members", {})
@@ -46,6 +46,7 @@ def other_page(browser: Browser, base_url: str) -> Iterator[Page]:
     context.close()
 
 
+@covers("test_shows_sign_in_and_register_forms")
 def test_load_checks_the_session_once(page: Page, traffic: ApiTraffic) -> None:
     load_signed_out(page)
 
@@ -54,6 +55,7 @@ def test_load_checks_the_session_once(page: Page, traffic: ApiTraffic) -> None:
     assert (calls[0].status, calls[0].json()) == (401, {"detail": "Not signed in"})
 
 
+@covers("test_shows_alert_when_backend_fails")
 def test_backend_failure_checks_the_session_once(page: Page, traffic: ApiTraffic) -> None:
     page.route("**/api/me", lambda route: route.fulfill(status=500))
 
@@ -65,6 +67,7 @@ def test_backend_failure_checks_the_session_once(page: Page, traffic: ApiTraffic
     assert calls[0].status == 500
 
 
+@covers("test_register_sign_in_and_see_display_name")
 def test_register_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     user_id = unique_user_id("ada")
     load_signed_out(page)
@@ -81,6 +84,7 @@ def test_register_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     )
 
 
+@covers("test_register_sign_in_and_see_display_name", "test_session_survives_a_reload")
 def test_sign_in_sends_one_request_and_never_resends_the_password(
     page: Page, traffic: ApiTraffic
 ) -> None:
@@ -112,6 +116,7 @@ def test_sign_in_sends_one_request_and_never_resends_the_password(
         assert typed not in f"{call.url} {call.request_body} {call.body}"
 
 
+@covers("test_unregistered_user_id_cannot_sign_in")
 def test_unregistered_sign_in_gets_generic_401(page: Page, traffic: ApiTraffic) -> None:
     load_signed_out(page)
 
@@ -123,6 +128,7 @@ def test_unregistered_sign_in_gets_generic_401(page: Page, traffic: ApiTraffic) 
     assert (calls[1].status, calls[1].json()) == (401, {"detail": "Invalid user ID or password"})
 
 
+@covers("test_sign_out_returns_to_sign_in")
 def test_sign_out_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
 
@@ -136,6 +142,7 @@ def test_sign_out_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     assert (calls[-1].status, calls[-1].request_body) == (204, None)
 
 
+@covers("test_register_sign_in_and_see_display_name")
 def test_sign_in_loads_my_groups_and_the_browse_list_once(page: Page, traffic: ApiTraffic) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
 
@@ -145,6 +152,7 @@ def test_sign_in_loads_my_groups_and_the_browse_list_once(page: Page, traffic: A
     assert calls[4].status == 200
 
 
+@covers("test_owner_approves_a_member_who_found_the_group_by_browsing")
 def test_create_group_posts_once_then_reloads_my_groups(page: Page, traffic: ApiTraffic) -> None:
     name = unique_group_name("Goa")
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
@@ -161,6 +169,7 @@ def test_create_group_posts_once_then_reloads_my_groups(page: Page, traffic: Api
     assert calls[1].json() == [created]
 
 
+@covers("test_owner_approves_a_member_who_found_the_group_by_browsing")
 def test_browse_search_sends_one_query(page: Page, traffic: ApiTraffic) -> None:
     name = unique_group_name("Goa")
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
@@ -195,6 +204,7 @@ def _owned_group(owner: Page) -> str:
     return name
 
 
+@covers("test_owner_approves_a_member_who_found_the_group_by_browsing")
 def test_request_from_browse_posts_once(page: Page, other_page: Page, traffic: ApiTraffic) -> None:
     name = _owned_group(other_page)
     register_and_sign_in(page, unique_user_id("bob"), "Bob")
@@ -213,6 +223,7 @@ def test_request_from_browse_posts_once(page: Page, other_page: Page, traffic: A
     assert calls[0].status == 201
 
 
+@covers("test_owner_rejects_a_request_made_by_name")
 def test_request_by_name_posts_the_name_once(
     page: Page, other_page: Page, traffic: ApiTraffic
 ) -> None:
@@ -257,6 +268,10 @@ def _owner_with_pending_request(
     ("decision", "button", "status", "member_count"),
     [("approve", "Approve Bob", "approved", 2), ("reject", "Reject Bob", "rejected", 1)],
 )
+@covers(
+    "test_owner_approves_a_member_who_found_the_group_by_browsing",
+    "test_owner_rejects_a_request_made_by_name",
+)
 def test_decision_posts_once_then_reloads_the_group(
     page: Page,
     other_page: Page,
@@ -289,6 +304,7 @@ def test_decision_posts_once_then_reloads_the_group(
     assert reloaded["pending_requests"] == []
 
 
+@covers("test_taken_user_id_cannot_register_again")
 def test_taken_user_id_gets_one_generic_409(page: Page, traffic: ApiTraffic) -> None:
     user_id = unique_user_id("ada")
     load_signed_out(page)
@@ -304,6 +320,7 @@ def test_taken_user_id_gets_one_generic_409(page: Page, traffic: ApiTraffic) -> 
     assert (calls[2].status, calls[2].json()) == (409, {"detail": "User ID already taken"})
 
 
+@covers("test_unknown_group_name_says_so")
 def test_unknown_group_name_gets_one_404_and_no_reload(page: Page, traffic: ApiTraffic) -> None:
     name = unique_group_name("Nowhere")
     register_and_sign_in(page, unique_user_id("bob"), "Bob")
@@ -323,6 +340,7 @@ def test_unknown_group_name_gets_one_404_and_no_reload(page: Page, traffic: ApiT
     assert (calls[0].status, calls[0].json()) == (404, {"detail": "Not found"})
 
 
+@covers("test_taken_group_name_says_so")
 def test_taken_group_name_gets_one_409_and_no_reload(page: Page, traffic: ApiTraffic) -> None:
     name = unique_group_name("Goa")
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
@@ -339,3 +357,17 @@ def test_taken_group_name_gets_one_409_and_no_reload(page: Page, traffic: ApiTra
     assert [call.signature for call in calls] == [CREATE], traffic.describe()
     assert calls[0].request_json() == {"name": name.upper(), "description": ""}
     assert (calls[0].status, calls[0].json()) == (409, {"detail": "Group name already taken"})
+
+
+@covers("test_markup_in_a_display_name_is_never_rendered")
+def test_markup_display_name_is_refused_before_any_request(page: Page, traffic: ApiTraffic) -> None:
+    load_signed_out(page)
+    register_form = form(page, "Register")
+    register_form.get_by_label("User ID").fill(unique_user_id("eve"))
+    register_form.get_by_label("Display name").fill("<img src=x onerror=alert(1)>")
+
+    register_form.get_by_role("button", name="Register").click()
+    expect(register_form.get_by_role("alert")).to_be_visible()
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls] == [ME], traffic.describe()

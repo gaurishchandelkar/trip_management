@@ -5,7 +5,7 @@ It's the same for every tool. Tool-specific files such as `CLAUDE.md` only add t
 
 ## What this repo is
 
-A Hello World React + FastAPI app inside an **Agentic Harness**:
+A trip management app for friends (React + FastAPI, SQLite) inside an **Agentic Harness**:
 
 - **Rules guide**: the documents in `docs/` tell you how to work.
 - **Safeguards protect**: hooks, linters and permission rules block unsafe changes.
