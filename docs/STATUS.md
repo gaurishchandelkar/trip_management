@@ -26,7 +26,8 @@
 
 ## In progress
 
-- None. App shell and design system merged in PR #3 (`docs/plans/PLAN_app-shell-and-design-system.md`, status Done).
+- **CI screenshot artifacts** (`docs/plans/PLAN_ci-screenshot-artifacts.md`), branch `feat/ci-screenshot-artifacts`.
+  - Phase 1 done: `e2e/test_screenshots.py` captures 20 screenshots (5 screens, light and dark, 360 and 1280 px) into `test-results/screenshots/`. It uses its own backend and preview server (ports 8101 and 5274) and fixed sample data.
 
 ## Known gaps
 
