@@ -11,15 +11,9 @@ from pathlib import Path
 from typing import Literal, cast
 
 import pytest
-from playwright.sync_api import (
-    APIResponse,
-    Browser,
-    Page,
-    Playwright,
-    StorageState,
-    expect,
-)
+from playwright.sync_api import APIResponse, Page, Playwright, StorageState, expect
 from playwright.sync_api import Error as PlaywrightError
+from pytest_playwright import CreateContextCallback
 
 from e2e.app import api, form, section
 from e2e.network import ApiTraffic, Signature
@@ -79,22 +73,29 @@ def _loaded(page: Page, heading: str) -> None:
     """Waits until the screen is final: its heading shows, nothing is loading, fonts are in."""
     expect(page.get_by_role("heading", name=heading, exact=True)).to_be_visible()
     expect(page.get_by_text("Loading…")).to_have_count(0)
+    # A FontFaceSet can't cross back from the page, so resolve to a plain value.
     page.evaluate("document.fonts.ready.then(() => true)")
+    # `ready` also resolves when a font fails, so check the web font is the one in use.
+    inter_loaded = page.evaluate(
+        """[...document.fonts].some((face) =>
+            face.family.replaceAll('"', "") === "Inter Variable" && face.status === "loaded")"""
+    )
+    assert inter_loaded, "the Inter web font didn't load"
 
 
-def _sign_in(page: Page, _show: Showcase) -> list[Signature]:
+def _sign_in(page: Page, show: Showcase) -> list[Signature]:
     with page.expect_response(api("GET", "/api/me")):
-        page.goto("/")
+        page.goto(f"{show.base_url}/")
     _loaded(page, "Sign in")
     return [ME]
 
 
-def _home(page: Page, _show: Showcase) -> list[Signature]:
+def _home(page: Page, show: Showcase) -> list[Signature]:
     with (
         page.expect_response(api("GET", "/api/me/groups")),
         page.expect_response(api("GET", "/api/groups")),
     ):
-        page.goto("/")
+        page.goto(f"{show.base_url}/")
     _loaded(page, "Groups")
     expect(section(page, "My groups").get_by_role("link", name="Goa Getaway")).to_be_visible()
     expect(
@@ -120,16 +121,17 @@ def _new_group_dialog(page: Page, show: Showcase) -> list[Signature]:
 def _group(page: Page, show: Showcase) -> list[Signature]:
     path = f"/api/groups/{show.goa_id}"
     with page.expect_response(api("GET", path)):
-        page.goto(f"/groups/{show.goa_id}")
+        page.goto(f"{show.base_url}/groups/{show.goa_id}")
     _loaded(page, "Goa Getaway")
+    expect(page.get_by_text("Beach week in December.")).to_be_visible()
     expect(section(page, "Members")).to_contain_text("Ada Lovelace")
     expect(section(page, "Pending requests")).to_contain_text("Bob Marley")
     return [ME, ("GET", path, {})]
 
 
-def _not_found(page: Page, _show: Showcase) -> list[Signature]:
+def _not_found(page: Page, show: Showcase) -> list[Signature]:
     with page.expect_response(api("GET", "/api/me")):
-        page.goto("/nowhere")
+        page.goto(f"{show.base_url}/nowhere")
     _loaded(page, "Page not found")
     return [ME]
 
@@ -161,12 +163,16 @@ def test_every_screen_is_captured() -> None:
 @pytest.mark.parametrize("width", WIDTHS)
 @pytest.mark.parametrize("theme", THEMES)
 def test_captures_every_screen(
-    browser: Browser, showcase: Showcase, theme: Literal["light", "dark"], width: int
+    new_context: CreateContextCallback,
+    showcase: Showcase,
+    theme: Literal["light", "dark"],
+    width: int,
 ) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
+    # pytest-playwright's own contexts, so a failed capture keeps its trace and screenshot. They
+    # already carry the main servers' base_url, so the captures use absolute URLs instead.
     contexts = {
-        signed_in: browser.new_context(
-            base_url=showcase.base_url,
+        signed_in: new_context(
             viewport={"width": width, "height": 800},
             color_scheme=theme,
             reduced_motion="reduce",
@@ -174,26 +180,23 @@ def test_captures_every_screen(
         )
         for signed_in in (False, True)
     }
-    try:
-        for screen in SCREENS:
-            capture = CAPTURES[screen]
-            page = contexts[capture.signed_in].new_page()
-            traffic = ApiTraffic(page)
-            try:
-                expected = capture.load(page, showcase)
-            # A failed expectation, or a response that never came: either way, no image.
-            except (AssertionError, PlaywrightError) as error:
-                pytest.fail(f"{screen} ({theme}, {width} px) didn't load: {error}")
-
-            calls = [call.signature for call in traffic.api_calls()]
-            assert calls == expected, f"{screen}: {traffic.describe()}"
-            assert traffic.foreign_origins(showcase.base_url) == [], traffic.describe()
+    for screen in SCREENS:
+        capture = CAPTURES[screen]
+        page = contexts[capture.signed_in].new_page()
+        traffic = ApiTraffic(page)
+        try:
+            expected = capture.load(page, showcase)
             expect(page.locator("body")).to_have_css("background-color", BACKGROUND[theme])
+        # A failed expectation, or a response that never came: either way, no image.
+        except (AssertionError, PlaywrightError) as error:
+            pytest.fail(f"{screen} ({theme}, {width} px) didn't load: {error}")
 
-            path = OUT / f"{screen}-{theme}-{width}.png"
-            page.screenshot(path=path, full_page=True, animations="disabled", caret="hide")
-            assert path.stat().st_size > 0, path
-            page.close()
-    finally:
-        for context in contexts.values():
-            context.close()
+        calls = [call.signature for call in traffic.api_calls()]
+        assert calls == expected, f"{screen}: {traffic.describe()}"
+        foreign = traffic.foreign_origins(showcase.base_url)
+        assert foreign == [], f"{screen}: requests outside the servers: {traffic.describe()}"
+
+        path = OUT / f"{screen}-{theme}-{width}.png"
+        page.screenshot(path=path, full_page=True, animations="disabled", caret="hide")
+        assert path.stat().st_size > 0, path
+        page.close()

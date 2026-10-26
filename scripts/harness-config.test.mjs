@@ -240,17 +240,21 @@ test("the functional job uploads the UI screenshots on every run", () => {
   const summary = steps.find((step) => step.includes("scripts/screenshot-summary.mjs"));
 
   assert.ok(upload, "No upload step for ui-screenshots in the functional job.");
+  // Whole lines, so `retention-days: 140` or a commented-out `# if: always()` doesn't pass.
+  const hasLine = (step, setting) =>
+    step.split("\n").some((line) => /^\s*(?:- )?(.*?)\s*$/.exec(line)?.[1] === setting);
   for (const setting of [
     "uses: actions/upload-artifact@v7",
     "if: always()",
-    "path: test-results/screenshots/",
+    // Images only, so nothing else that lands in the folder is ever published.
+    "path: test-results/screenshots/*.png",
     "retention-days: 14",
     "if-no-files-found: error",
   ]) {
-    assert.ok(upload.includes(setting), `The ui-screenshots upload needs \`${setting}\`.`);
+    assert.ok(hasLine(upload, setting), `The ui-screenshots upload needs \`${setting}\`.`);
   }
   assert.ok(summary, "No step writes the UI screenshots summary.");
-  assert.ok(summary.includes("if: always()"), "The summary step needs `if: always()`.");
+  assert.ok(hasLine(summary, "if: always()"), "The summary step needs `if: always()`.");
   assert.ok(summary.includes('>> "$GITHUB_STEP_SUMMARY"'), "The summary goes to the job summary.");
   // The summary needs no write token: the workflow stays read-only.
   assert.match(workflow, /^permissions:\n {2}contents: read\n(?! )/m);

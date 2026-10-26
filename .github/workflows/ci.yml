@@ -62,7 +62,8 @@ jobs:
         if: always()
         with:
           name: ui-screenshots
-          path: test-results/screenshots/
+          # Images only: anything else that lands in the folder later is never published.
+          path: test-results/screenshots/*.png
           retention-days: 14
           if-no-files-found: error
       - if: always()

@@ -163,6 +163,30 @@ Name each test as `path::test name`: a Python `def`, or a vitest title exactly a
 | CI uploads `ui-screenshots` on every run, kept 14 days, `if-no-files-found: error` | `scripts/harness-config.test.mjs::the functional job uploads the UI screenshots on every run` |
 | The job summary lists the 20 files and names the artifact | `scripts/screenshot-summary.test.mjs::prints a UI screenshots section that names the artifact`, `scripts/harness-config.test.mjs::the functional job uploads the UI screenshots on every run` |
 | The PR template says where the screenshots are | `scripts/harness-config.test.mjs::the PR template tells reviewers where the UI screenshots are` |
-| A missing or unloaded screen fails, naming it; a partial set never passes | `e2e/test_screenshots.py::test_every_screen_is_captured`, `scripts/screenshot-summary.test.mjs::fails and names a missing screenshot`, `scripts/screenshot-summary.test.mjs::fails on an unexpected file` |
+| A missing or unloaded screen fails, naming it; a partial set never passes | `e2e/test_screenshots.py::test_every_screen_is_captured`, `e2e/test_screenshots.py::test_captures_every_screen` (the unloaded-screen path is shown by the manual held-request and blocked-font proofs in Phase 1 and review fixes), `scripts/screenshot-summary.test.mjs::fails and names a missing screenshot`, `scripts/screenshot-summary.test.mjs::fails on an unexpected file`, `scripts/screenshot-summary.test.mjs::exits 0 for the full set and 1 for a partial or missing one, as CI runs it` |
 | Negative proof: drop a screen and the count check fails | `e2e/test_screenshots.py::test_every_screen_is_captured`, `scripts/screenshot-summary.test.mjs::lists the same screens as the capture tests` |
 | Capture calls are only the screen's own; no third-party requests | `e2e/test_screenshots.py::test_captures_every_screen` |
+
+## Review fixes (`/ship`)
+
+Neither reviewer found anything blocking. Fixed before the PR:
+
+- **Security 1:** the summary printed unexpected file names inside code spans with no escaping, so a crafted name could add links or headings. Only plain names (`[\w.-]+`) are printed now; others are counted. Tested by `never prints a file name that could inject Markdown into the summary`.
+- **Security 2:** the upload sent everything in the folder. It's now `test-results/screenshots/*.png`, so a trace, log or storage state that lands there later is never published. The config test pins the glob.
+- **Code 1:** the script's exit code, which CI relies on, had no test. `exits 0 for the full set and 1 for a partial or missing one, as CI runs it` spawns it as CI does. Proof: deleting `process.exitCode = 1` failed only that test.
+- **Code 2:** with nothing captured, the summary pointed to an artifact that doesn't exist. It now says the run has no artifact (`says there is no artifact when nothing was captured`).
+- **Code 3:** a failed capture's trace and screenshot showed the blank fixture page. The captures now use pytest-playwright's `new_context` fixture, with absolute URLs because that fixture already sets the main servers' `base_url`. Proof: a failed run kept 5 traces and its failure screenshots, under `test-results/<test>/`, outside the uploaded `*.png`.
+- **Code 4:** `document.fonts.ready` also resolves when a font fails. `_loaded` now also asserts that an `Inter Variable` face has status `loaded`. Proof: blocking `*.woff2` failed with "sign-in (light, 1280 px) didn't load: the Inter web font didn't load".
+- **Code 5:** the coverage row for unloaded screens now names `test_captures_every_screen` and the spawn test, and says which part rests on manual proofs.
+- **Code 6:** the spec described the screenshots as using the shared E2E servers and database. It now describes the second pair, and says a failed build or unit job means no functional run and no upload.
+- **Code 8:** the CI config checks match whole lines, so `retention-days: 140` or a commented-out `if:` no longer passes. Proof: `retention-days: 140` failed with "needs `retention-days: 14`".
+- **Code 9 to 11:**
+  - every per-screen failure names its screen
+  - the background check moved inside the named block
+  - the group capture asserts "Beach week in December."
+  - a comment explains `.then(() => true)`
+
+Left for the human:
+
+- **`if: always()` or `if: ${{ !cancelled() }}`** (code 7 and security 4). `cancel-in-progress: true` cancels superseded runs, and `always()` still runs both steps then, so a cancelled run shows a failed "no files" upload and summary. `!cancelled()` keeps D2's "passing or failing" and skips cancelled runs, but it changes decision D2.
+- **Pin actions to commit SHAs** (security 3). It's the existing practice across the whole workflow, so it belongs in a separate change. Dependabot's `github-actions` updates would keep the pins current.

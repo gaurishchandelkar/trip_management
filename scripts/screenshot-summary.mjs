@@ -12,25 +12,41 @@ export const WIDTHS = [360, 1280];
 const VARIANTS = THEMES.flatMap((theme) => WIDTHS.map((width) => `${theme}-${String(width)}`));
 export const EXPECTED = SCREENS.flatMap((screen) => VARIANTS.map((v) => `${screen}-${v}.png`));
 
+// File names reach the job summary's Markdown. Only plain names are printed; any other name
+// could break out of its code span and add links or headings, so it's only counted.
+const PLAIN_NAME = /^[\w.-]+$/;
+
 export function summarize(files) {
   const present = new Set(files);
   const missing = EXPECTED.filter((file) => !present.has(file));
   const unexpected = files.filter((file) => !EXPECTED.includes(file)).sort();
   const cell = (screen, variant) =>
     present.has(`${screen}-${variant}.png`) ? "yes" : "**missing**";
-  const lines = [
-    "## UI screenshots",
-    "",
-    `${String(EXPECTED.length - missing.length)} of ${String(EXPECTED.length)} screenshots, in this run's \`ui-screenshots\` artifact (run Summary, Artifacts).`,
-    "",
-    `| Screen | ${VARIANTS.join(" | ")} |`,
-    `|---|${VARIANTS.map(() => "---").join("|")}|`,
-    ...SCREENS.map(
-      (screen) => `| ${screen} | ${VARIANTS.map((v) => cell(screen, v)).join(" | ")} |`,
-    ),
-  ];
-  if (unexpected.length > 0)
-    lines.push("", `Unexpected files: ${unexpected.map((file) => `\`${file}\``).join(", ")}`);
+  const lines =
+    missing.length === EXPECTED.length
+      ? [
+          "## UI screenshots",
+          "",
+          "No screenshots were captured, so this run has no `ui-screenshots` artifact. See the functional step's log.",
+        ]
+      : [
+          "## UI screenshots",
+          "",
+          `${String(EXPECTED.length - missing.length)} of ${String(EXPECTED.length)} screenshots, in this run's \`ui-screenshots\` artifact (run Summary, Artifacts).`,
+          "",
+          `| Screen | ${VARIANTS.join(" | ")} |`,
+          `|---|${VARIANTS.map(() => "---").join("|")}|`,
+          ...SCREENS.map(
+            (screen) => `| ${screen} | ${VARIANTS.map((v) => cell(screen, v)).join(" | ")} |`,
+          ),
+        ];
+  if (unexpected.length > 0) {
+    const plain = unexpected.filter((file) => PLAIN_NAME.test(file));
+    const others = unexpected.length - plain.length;
+    const listed = plain.map((file) => `\`${file}\``);
+    if (others > 0) listed.push(`${String(others)} more with unusual names`);
+    lines.push("", `Unexpected files: ${listed.join(", ")}`);
+  }
   return {
     markdown: `${lines.join("\n")}\n`,
     missing,

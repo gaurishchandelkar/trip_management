@@ -10,7 +10,7 @@ Every CI run captures each main screen of the app in light and dark, at phone (3
 
 - **No change to the existing checks.** The seven CI jobs, their names, order and pass/fail rules stay the same. The functional job's `playwright-report` artifact (uploaded on failure, kept 7 days) is unchanged.
 - **Existing E2E tests are untouched.** Capturing screenshots adds no outside journey to `e2e/test_journeys.py`, so the outside/inside pairing check in `scripts/harness-config.test.mjs` is unchanged. The screenshots are evidence, not a journey.
-- **Same servers, same rules.** Captures run against the servers `e2e/conftest.py` starts (fresh production build, dedicated ports, throwaway database). The `traffic` fixture's ban on third-party origins still applies. No sleeps, `networkidle` or `wait_for_timeout` (the `badWaits` scan).
+- **Same build, same rules.** Captures run against a second backend and preview server that `e2e/conftest.py` starts from the same fresh production build, on their own dedicated ports and with their own throwaway database. The shared E2E database collects every test's groups, which Browse would show. Third-party origins are still banned, and each capture checks it. No sleeps, `networkidle` or `wait_for_timeout` (the `badWaits` scan).
 - **CI permissions stay `contents: read`.** No new secrets and no write tokens (D4).
 - **Captured inside the existing functional stage (D1),** by a new module `e2e/test_screenshots.py`. No new CI job and no new required check.
 - **No new dependencies.** It uses pytest-playwright and the pinned `actions/upload-artifact@v7` already in `ci.yml`.
@@ -66,7 +66,8 @@ Every CI run captures each main screen of the app in light and dark, at phone (3
 
 ## Failure conditions
 
-- **The app can't start** (build, backend or preview server fails): the functional job fails as today. With `if: always()` (D2), the upload still runs, alongside `playwright-report`. If nothing was captured, `if-no-files-found: error` makes the missing evidence visible as its own failed step.
+- **The app can't start** (build, backend or preview server fails): the functional job fails as today. With `if: always()` (D2), the upload still runs, alongside `playwright-report`. If nothing was captured, `if-no-files-found: error` makes the missing evidence visible as its own failed step, and the job summary says the run has no artifact.
+- **The build or unit job fails:** the functional job, which depends on both, doesn't run, so nothing is captured or uploaded. That's the existing pass/fail rule, unchanged.
 - **A screen doesn't reach its loaded state** (heading not visible, skeleton still showing): that capture fails with the screen's name, and the functional stage fails. A half-loaded screenshot is never uploaded as if it were good.
 - **Fewer than 20 files:** the count check fails, and `if-no-files-found: error` fails the upload when there are none.
 - **The artifact service is down or the upload fails:** the upload step fails the job, so a run never looks complete without its evidence. A re-run fixes it.
@@ -94,7 +95,7 @@ Every CI run captures each main screen of the app in light and dark, at phone (3
 
 Confirmed by the human on 2026-10-26.
 
-- **D1. Where the captures run:** in the existing functional stage, through a new `e2e/test_screenshots.py`. It reuses the E2E build, servers and database. It adds about 20–30 s, needs no new CI job or required check, and also runs locally with `npm run check`.
+- **D1. Where the captures run:** in the existing functional stage, through a new `e2e/test_screenshots.py`. It reuses the E2E build, with a second backend and preview server and their own database (see the plan). It adds about 20–30 s, needs no new CI job or required check, and also runs locally with `npm run check`.
 - **D2. When the artifact is uploaded:** on every run (`if: always()`): pull requests and pushes to `main`, passing or failing, so a failed UI change can still be inspected.
 - **D3. Retention:** 14 days, long enough for a PR's review cycle.
 - **D4. How reviewers find it:** a "UI screenshots" section in the functional job's summary, plus a line in the PR template. The workflow token stays `contents: read`; there's no bot comment and no `pull-requests: write`.
