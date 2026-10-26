@@ -71,6 +71,7 @@ The app is branded **Caravan** ("Plan trips together."). Its design spec is `doc
 - Forms show each field's rule up front, check input before sending, mark a failed field invalid and show their own messages. A button is disabled while its request is in flight, so a double click sends one request. User-supplied text is only ever rendered as text.
 - A `401` returns the app to the sign-in screen at the same address. An explicit sign-out returns home. Other failures show "Something went wrong, please try again."
 - **Appearance:** light and dark themes follow the system setting, motion stops under reduced motion, and the Inter font is bundled with a system fallback. Every text colour pair meets WCAG AA contrast (`frontend/src/theme/tokens.test.ts`). No screen scrolls sideways at 360 px, and buttons and links are at least 44 px tall on phones.
+- **Screenshots for review:** every CI run captures sign-in, home, the New group dialog, a group and Page not found, in light and dark at 360 and 1280 px, with fixed sample data. They're published as the `ui-screenshots` artifact (`docs/specs/ci-screenshot-artifacts.md`).
 
 ## Storage
 

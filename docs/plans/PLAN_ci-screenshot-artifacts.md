@@ -1,7 +1,7 @@
 # Plan: CI screenshot artifacts
 
 Spec: `docs/specs/ci-screenshot-artifacts.md`
-Status: **In progress** <!-- Awaiting approval | Approved | In progress | Done -->
+Status: **Done** <!-- Awaiting approval | Approved | In progress | Done -->
 Approved: 2026-10-26 by the repo owner, in conversation.
 
 ## Approach
@@ -129,18 +129,23 @@ Success criteria:
   - `docs/SPEC.md` and `docs/STATUS.md`
   - a `docs/HARNESS_LOG.md` entry for the CI change
 
+Notes from implementation:
+- `jobSteps` in `scripts/harness-config.test.mjs` reads this workflow's layout (jobs at two spaces, steps at six) rather than parsing YAML, so the check needs no new dependency. Its own test covers a job between two others, and a job that doesn't exist.
+- The config test also asserts that nothing in `ci.yml` asks for a `write` permission.
+
 Success criteria:
-- [ ] The new `harness-config` tests pass
-- [ ] Negative proof: temporarily remove `if: always()` from the upload step. The CI config test fails. Revert
-- [ ] `npm run check` passes
+- [x] The new `harness-config` tests pass (14/14): `the functional job uploads the UI screenshots on every run`, `jobSteps reads only the named job's steps`, `the PR template tells reviewers where the UI screenshots are`
+- [x] Negative proof: removing `if: always()` from the upload step failed only the CI config test, with "The ui-screenshots upload needs `if: always()`." Reverted
+- [x] `npm run check` passes (see Final verification)
 - [ ] **After you push the branch:** `gh run view <id>` shows a `ui-screenshots` artifact on the PR's run. Downloaded, it has 20 PNGs and is at most 5 MB. `gh api .../artifacts` shows it expires 14 days after the run
 - [ ] **After you push the branch:** the functional job's summary on that run shows the "UI screenshots" section with all 20 present
-- [ ] `docs/SPEC.md`, `docs/STATUS.md`, `docs/PROCESS.md` and `docs/HARNESS_LOG.md` are updated
+- [x] `docs/SPEC.md`, `docs/STATUS.md`, `docs/PROCESS.md` and `docs/HARNESS_LOG.md` are updated
 
 ## Final verification
 
-- [ ] `npm run check` passes
-- [ ] Every acceptance criterion in the spec is covered by a test (table below)
+- [x] `npm run check` passes
+- [x] Every acceptance criterion in the spec is covered by a test (table below). With Status **Done**, `scripts/harness-config.test.mjs` confirms that every name in the table matches a test
+- [ ] The two CI-run criteria in Phase 3 are checked on the PR's first run, during `/ship`
 
 ### Spec coverage
 

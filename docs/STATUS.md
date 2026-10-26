@@ -19,16 +19,15 @@
   - Coverage gates are at 80%.
   - E2E runs on dedicated ports, so a running dev server is never what gets tested.
   - E2E is pytest + Playwright against a fresh production build. Each journey has an outside test (what the user sees) and an inside test (the exact API calls, via `e2e/network.py`), paired with `@covers` and checked by `scripts/harness-config.test.mjs`.
-- **CI:** GitHub Actions runs one job per stage. Dependabot and CODEOWNERS are configured. GitHub doesn't protect `main`: the repo is private on a free plan, so GitHub refuses branch protection (403). A lefthook pre-commit job (`scripts/refuse-main.mjs`) refuses local commits on `main` instead. Once the plan changes, `scripts/protect-branch.mjs --solo` requires PRs, an up-to-date branch and all 7 CI checks, admins included.
+  - `e2e/test_screenshots.py` captures 20 screenshots of the main screens against its own servers (ports 8101 and 5274) with fixed sample data.
+- **CI:** GitHub Actions runs one job per stage. The functional job uploads the screenshots as `ui-screenshots` on every run, kept 14 days, and lists them in its job summary (`scripts/screenshot-summary.mjs`). Dependabot and CODEOWNERS are configured. GitHub doesn't protect `main`: the repo is private on a free plan, so GitHub refuses branch protection (403). A lefthook pre-commit job (`scripts/refuse-main.mjs`) refuses local commits on `main` instead. Once the plan changes, `scripts/protect-branch.mjs --solo` requires PRs, an up-to-date branch and all 7 CI checks, admins included.
 - **Staged autonomy:** the `/spec`, `/plan`, `/implement`, `/ship` and `/retro` skills, the `code-reviewer` and `security-reviewer` subagents, and the PR template.
 - **Flywheel and metrics:** `docs/HARNESS_LOG.md`, `docs/METRICS.md` and `npm run metrics`.
 - **Reference example:** `docs/specs/personalised-greeting.md` and `docs/plans/PLAN_personalised-greeting.md`.
 
 ## In progress
 
-- **CI screenshot artifacts** (`docs/plans/PLAN_ci-screenshot-artifacts.md`), branch `feat/ci-screenshot-artifacts`.
-  - Phase 1 done: `e2e/test_screenshots.py` captures 20 screenshots (5 screens, light and dark, 360 and 1280 px) into `test-results/screenshots/`. It uses its own backend and preview server (ports 8101 and 5274) and fixed sample data.
-  - Phase 2 done: `scripts/screenshot-summary.mjs` prints the "UI screenshots" summary and exits 1 when the set of 20 isn't exact.
+- **CI screenshot artifacts** (`docs/plans/PLAN_ci-screenshot-artifacts.md`) is implemented on branch `feat/ci-screenshot-artifacts`. The upload and job summary still need checking on the PR's first CI run, then `/ship`.
 
 ## Known gaps
 

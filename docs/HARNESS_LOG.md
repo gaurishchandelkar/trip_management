@@ -13,6 +13,24 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-26: CI publishes screenshots of the UI on every run
+- Signal: successful pattern
+- What happened: For PR #3, the screenshots reviewers saw were ones an agent took by hand in a dev browser. Some showed the UI before the last phase, and attaching them took several manual attempts. Nothing tied them to the code being merged.
+- Improvement: test and CI change, approved in `docs/specs/ci-screenshot-artifacts.md` (D1–D4).
+  - `e2e/test_screenshots.py` captures 5 screens × 2 themes × 2 widths against its own servers and fixed sample data. Each capture waits until its screen has loaded, checks its exact API calls, and names the screen when one fails.
+  - `.github/workflows/ci.yml` uploads `ui-screenshots` with `if: always()`, kept 14 days with `if-no-files-found: error`. `scripts/screenshot-summary.mjs` writes the job summary and fails on a missing or unexpected file.
+  - `scripts/harness-config.test.mjs` checks the workflow steps and the PR template line.
+
+  Proof:
+  - dropping a screen failed `test_every_screen_is_captured`
+  - holding a request failed the capture with the screen's name and saved no image
+  - a folder missing one image made the summary exit 1
+  - removing `if: always()` failed the config test
+  - two local runs produced identical images
+
+  The stage got 8.4 s slower (159.6 s to 168.0 s).
+- Enforced: yes (functional stage, unit stage, and the CI step itself)
+
 ## 2026-10-26: The plan's coverage table named tests that didn't exist
 - Signal: repeated review feedback
 - What happened: The app-shell-and-design-system plan mapped each spec criterion to checks written as "3 vitest" or "2 outside plus inside E2E". At `/ship`, `code-reviewer` found four criteria that no test covered:

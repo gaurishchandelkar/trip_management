@@ -1,6 +1,6 @@
 # Spec: CI screenshot artifacts
 
-> Status: **ready for planning**. Decisions D1–D4 are recorded at the end. It builds on the Caravan UI from `docs/specs/app-shell-and-design-system.md` (PR #3), so it can't be planned until that merges.
+> Status: **implemented** (`docs/plans/PLAN_ci-screenshot-artifacts.md`). Decisions D1–D4 are recorded at the end.
 
 ## Expected outcome
 

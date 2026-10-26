@@ -23,6 +23,8 @@
 <paste the npm run check stage summary>
 ```
 
+UI screenshots: open this PR's CI run and download the `ui-screenshots` artifact. The functional job's summary lists all 20.
+
 ## Reviewer findings not addressed
 
 <!-- Non-blocking findings and why they were left. -->
