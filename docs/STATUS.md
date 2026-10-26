@@ -3,12 +3,14 @@
 ## Current state
 
 - **Product:** Trip Management members and groups (`docs/specs/members-and-groups.md`): register, sign in with a hashed session cookie (password field present but not checked yet), create groups, browse and search, ask to join from the list or by name, and owner approve or reject. SQLite storage through SQLAlchemy 2.x. The Hello World greeting is retired.
+- **Frontend:** branded **Caravan** (`docs/specs/app-shell-and-design-system.md`): an app shell with skip link and per-screen titles, `react-router` addresses (`/`, `/groups/{id}`, not found), modal dialogs for creating and joining groups, and a plain-CSS design system (`frontend/src/theme/`, `frontend/src/ui/`) with light and dark themes, a self-hosted Inter font, reduced-motion support and phone layouts down to 360 px.
 - **Rules:** `AGENTS.md`, `CLAUDE.md`, and the `docs/` rules and templates are in place.
 - **Safeguards:**
   - ruff (including bandit rules), pyright strict, ESLint strict, Prettier and tsc
   - import-linter layer contracts (`api → services → storage → domain`, and SQLAlchemy only in `backend/storage`)
   - pip-audit, npm audit and detect-secrets
   - a scan for invisible Unicode format characters in tracked source (`scripts/harness-config.test.mjs`)
+  - a design-token contrast test (WCAG AA, both themes) and a scan that keeps raw colours out of every stylesheet but `tokens.css` (`frontend/src/theme/tokens.test.ts`)
   - lefthook pre-commit
   - Claude Code permission rules, guard hook and format hook
 - **Verification:** `npm run check` runs build → lint → unit → integration → functional → security → architecture.
@@ -22,7 +24,7 @@
 
 ## In progress
 
-- None.
+- **App shell and design system** (`docs/plans/PLAN_app-shell-and-design-system.md`) is implemented on branch `feat/app-shell-and-design-system`, awaiting `/ship` and review.
 
 ## Known gaps
 
@@ -30,6 +32,7 @@
 - The guard asks before shell writes that name check config or contain suppressions, but it matches command text, so a write it doesn't recognise still gets through.
 - Passwords aren't checked yet (spec D1), so the app is for local, trusted use only until real authentication lands.
 - Browsing stops at 50 groups with no paging; members narrow the list with search.
+- The frontend's size budgets (150 KB of gzipped JS, 100 KB of font) were checked once when the design system landed (87 KB and 48 KB) and aren't gated in `npm run check`, so growth goes unnoticed until someone measures again.
 - The schema is created on startup with no migrations, so a later schema change needs a migration tool or a fresh database.
 - The guard hook only inspects command text heuristically. It's a seatbelt, not a sandbox, and CI is the backstop.
   It covers the Bash and PowerShell tools. A new shell tool must be added to `SHELL_TOOLS` in `.claude/hooks/guard.mjs`, and a test checks that `.claude/settings.json` sends each one through the guard.

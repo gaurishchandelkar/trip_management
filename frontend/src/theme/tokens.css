@@ -1,0 +1,141 @@
+/*
+ * Design tokens: the only file allowed raw colour values (theme/tokens.test.ts checks this and
+ * the contrast of every text, border and focus pair). Components use var(--...) only.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Brand */
+  --color-brand: #e8552f;
+  --color-on-brand: #ffffff;
+
+  /* Surfaces and text */
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-strong: #64748b;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+
+  /* Actions */
+  --color-primary: #c43d1a;
+  --color-primary-hover: #a8331a;
+  --color-on-primary: #ffffff;
+  --color-link: #c43d1a;
+  --color-danger: #b91c1c;
+  --color-danger-hover: #991b1b;
+  --color-on-danger: #ffffff;
+  --color-focus: #c43d1a;
+
+  /* Feedback and badges */
+  --color-success-text: #166534;
+  --color-success-bg: #ecfdf3;
+  --color-danger-text: #991b1b;
+  --color-danger-bg: #fef2f2;
+  --color-badge-owner-text: #9a3412;
+  --color-badge-owner-bg: #fff1eb;
+  --color-badge-member-text: #166534;
+  --color-badge-member-bg: #ecfdf3;
+  --color-badge-pending-text: #334155;
+  --color-badge-pending-bg: #f1f5f9;
+  --color-avatar-text: #9a3412;
+  --color-avatar-bg: #fff1eb;
+  --color-skeleton: #e2e8f0;
+
+  /* Type */
+  --font-sans:
+    "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* Space, on a 4 px scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+
+  /* Shape and depth */
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.1), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 20px 40px -12px rgb(15 23 42 / 0.25);
+  --backdrop: rgb(15 23 42 / 0.45);
+
+  /* Sizes */
+  --control-height: 2.5rem;
+  --touch-target: 2.75rem;
+  --content-width: 64rem;
+  --header-height: 4rem;
+  --avatar-size: 2.25rem;
+  --skeleton-height: 4.5rem;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  /* Buttons sit further from their ring, which can share their colour. */
+  --focus-ring-offset-button: 3px;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-pulse: 1.4s;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-surface-sunken: #0f172a;
+    --color-border: #334155;
+    --color-border-strong: #7c8ba1;
+    --color-text: #f1f5f9;
+    --color-text-muted: #94a3b8;
+
+    --color-primary: #ff8a66;
+    --color-primary-hover: #ffa385;
+    --color-on-primary: #0f172a;
+    --color-link: #ff8a66;
+    --color-danger: #f87171;
+    --color-danger-hover: #fca5a5;
+    --color-on-danger: #0f172a;
+    --color-focus: #ff8a66;
+
+    --color-success-text: #86efac;
+    --color-success-bg: #12301f;
+    --color-danger-text: #fca5a5;
+    --color-danger-bg: #3b1818;
+    --color-badge-owner-text: #ffb59e;
+    --color-badge-owner-bg: #3b1d14;
+    --color-badge-member-text: #86efac;
+    --color-badge-member-bg: #12301f;
+    --color-badge-pending-text: #cbd5e1;
+    --color-badge-pending-bg: #334155;
+    --color-avatar-text: #ffb59e;
+    --color-avatar-bg: #3b1d14;
+    --color-skeleton: #334155;
+
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.7);
+    --backdrop: rgb(0 0 0 / 0.6);
+  }
+}

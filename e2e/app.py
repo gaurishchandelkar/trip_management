@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from urllib.parse import urlsplit
 
-from playwright.sync_api import Locator, Page, Response, expect
+from playwright.sync_api import Locator, Page, Response, ViewportSize, expect
 
 
 def unique_user_id(prefix: str) -> str:
@@ -23,10 +23,10 @@ def form(page: Page, name: str) -> Locator:
     return page.get_by_role("form", name=name)
 
 
-def load(page: Page) -> None:
-    """Opens the app and waits for the session check, which is always the first call."""
+def load(page: Page, path: str = "/") -> None:
+    """Opens the app at a path and waits for the session check, which is always the first call."""
     with page.expect_response(api("GET", "/api/me")):
-        page.goto("/")
+        page.goto(path)
 
 
 def load_signed_out(page: Page) -> None:
@@ -78,13 +78,21 @@ def unique_group_name(prefix: str) -> str:
     return f"{prefix} {uuid.uuid4().hex[:10]}"
 
 
+def open_dialog(page: Page, button: str, form_name: str) -> Locator:
+    """Opens a home-screen dialog and returns its form. The header button comes first."""
+    page.get_by_role("button", name=button, exact=True).first.click()
+    dialog_form = form(page, form_name)
+    expect(dialog_form).to_be_visible()
+    return dialog_form
+
+
 def create_group(page: Page, name: str, description: str = "") -> None:
-    create_form = form(page, "Create group")
+    create_form = open_dialog(page, "New group", "Create group")
     create_form.get_by_label("Name").fill(name)
     create_form.get_by_label("Description").fill(description)
     with page.expect_response(api("GET", "/api/me/groups")):
         create_form.get_by_role("button", name="Create group").click()
-    expect(create_form.get_by_role("status")).to_have_text(f"Created {name}.")
+    expect(page.get_by_role("status")).to_have_text(f"Created {name}.")
 
 
 def search_groups(page: Page, term: str) -> None:
@@ -101,10 +109,61 @@ def section(page: Page, name: str) -> Locator:
 def open_group(page: Page, list_name: str, group_name: str) -> None:
     """Opens a group from "My groups" or "Browse groups" and waits for its detail."""
     with page.expect_response(lambda r: urlsplit(r.url).path.startswith("/api/groups/")):
-        section(page, list_name).get_by_role("button", name=group_name, exact=True).click()
+        section(page, list_name).get_by_role("link", name=group_name, exact=True).click()
     expect(page.get_by_role("heading", name=group_name, level=2)).to_be_visible()
+
+
+def group_path(page: Page) -> str:
+    """The open group's address, such as /groups/12."""
+    path = urlsplit(page.url).path
+    assert path.startswith("/groups/"), page.url
+    return path
+
+
+def back_to_home(page: Page) -> None:
+    """Uses the browser's Back button to return home, and waits for both home lists."""
+    with (
+        page.expect_response(api("GET", "/api/me/groups")),
+        page.expect_response(api("GET", "/api/groups")),
+    ):
+        page.go_back()
+    expect(section(page, "My groups")).to_be_visible()
 
 
 def sign_out(page: Page) -> None:
     with page.expect_response(api("POST", "/api/sign-out")):
         page.get_by_role("button", name="Sign out").click()
+
+
+PHONE: ViewportSize = {"width": 360, "height": 740}
+
+
+def sideways_overflow(page: Page) -> int:
+    """How many pixels the page is wider than the viewport: 0 when nothing scrolls sideways."""
+    return page.evaluate(
+        "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+    )
+
+
+def small_targets(page: Page, minimum: int = 44) -> list[str]:
+    """Visible buttons, links and fields under the minimum touch target in either direction.
+
+    Only what's reachable: with a modal dialog open, the page behind it can't be tapped.
+    """
+    return page.evaluate(
+        """(minimum) => {
+          const modal = document.querySelector("dialog[open]");
+          return [...(modal ?? document).querySelectorAll("button, a, input")]
+            .filter((element) => {
+              const box = element.getBoundingClientRect();
+              const shown = box.width > 0 && box.height > 0;
+              return shown && (box.width < minimum || box.height < minimum);
+            })
+            .map((element) => {
+              const box = element.getBoundingClientRect();
+              const name = element.textContent.trim() || element.id;
+              return `${name} (${box.width}x${box.height}px)`;
+            });
+        }""",
+        minimum,
+    )

@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -19,7 +20,7 @@ import {
   SignedOutError,
   UnavailableError,
 } from "./api";
-import { Groups } from "./Groups";
+import { AppRoutes } from "./AppRoutes";
 
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
@@ -58,8 +59,16 @@ beforeEach(() => {
   vi.mocked(browseGroups).mockResolvedValue([]);
 });
 
+function renderRoutes(path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppRoutes onSignedOut={onSignedOut} />
+    </MemoryRouter>,
+  );
+}
+
 async function renderGroups() {
-  render(<Groups onSignedOut={onSignedOut} />);
+  renderRoutes();
   await screen.findByText("You aren't in any groups yet.");
   await screen.findByText("No groups found.");
 }
@@ -72,6 +81,13 @@ function form(name: string) {
   return screen.getByRole("form", { name });
 }
 
+/** Opens a dialog from the home header, whose button comes before any empty-state one. */
+async function openDialog(button: "New group" | "Join by name") {
+  const [header] = screen.getAllByRole("button", { name: button });
+  if (header === undefined) throw new Error(`No ${button} button`);
+  await userEvent.click(header);
+}
+
 describe("home", () => {
   it("lists my groups and all groups with their status", async () => {
     vi.mocked(getMyGroups).mockResolvedValue([group({ my_status: "owner" })]);
@@ -81,10 +97,10 @@ describe("home", () => {
       group({ group_id: 3, name: "Kerala", my_status: "pending" }),
     ]);
 
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     const mine = section("My groups");
-    expect(await within(mine).findByRole("button", { name: "Goa 2027" })).toBeInTheDocument();
+    expect(await within(mine).findByRole("link", { name: "Goa 2027" })).toBeInTheDocument();
     expect(within(mine).getByText("You own this group")).toBeInTheDocument();
     const browse = section("Browse groups");
     expect(await within(browse).findByText("by Bob, 3 members")).toBeInTheDocument();
@@ -96,7 +112,7 @@ describe("home", () => {
   it("returns to sign-in when the session is gone", async () => {
     vi.mocked(getMyGroups).mockRejectedValue(new SignedOutError(401));
 
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await vi.waitFor(() => {
       expect(onSignedOut).toHaveBeenCalled();
@@ -106,14 +122,43 @@ describe("home", () => {
   it("shows the unavailable message when loading fails", async () => {
     vi.mocked(browseGroups).mockRejectedValue(new UnavailableError(503));
 
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
   });
 });
 
+describe("home header", () => {
+  it("offers New group as the main action and Join by name beside it, with no form open", async () => {
+    await renderGroups();
+
+    const [newGroup] = screen.getAllByRole("button", { name: "New group" });
+    expect(newGroup).toHaveClass("button--primary");
+    expect(screen.getByRole("button", { name: "Join by name" })).toHaveClass("button--secondary");
+    expect(screen.getByRole("heading", { level: 2, name: "Groups" })).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Create group" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Request to join" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens Join by name with the group name field focused", async () => {
+    await renderGroups();
+
+    await openDialog("Join by name");
+
+    expect(screen.getByRole("dialog", { name: "Request to join" })).toBeInTheDocument();
+    expect(within(form("Request to join")).getByLabelText("Group name")).toHaveFocus();
+    expect(
+      within(form("Request to join")).getByLabelText("Group name"),
+    ).toHaveAccessibleDescription(
+      "The group's full name. Capitals don't matter. Its owner decides.",
+    );
+  });
+});
+
 describe("creating a group", () => {
   async function create(name: string, description = "") {
+    await openDialog("New group");
     await userEvent.type(within(form("Create group")).getByLabelText("Name"), name);
     if (description)
       await userEvent.type(within(form("Create group")).getByLabelText("Description"), description);
@@ -130,10 +175,53 @@ describe("creating a group", () => {
     await create(" Goa 2027 ", "Beach week");
 
     expect(createGroup).toHaveBeenCalledWith("Goa 2027", "Beach week");
-    expect(await within(form("Create group")).findByRole("status")).toHaveTextContent(
-      "Created Goa 2027.",
-    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Created Goa 2027.");
+    expect(screen.queryByRole("form", { name: "Create group" })).toBeNull();
     expect(await within(section("My groups")).findByText("Goa 2027")).toBeInTheDocument();
+    expect(getMyGroups).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens in a dialog with the name field focused", async () => {
+    await renderGroups();
+
+    await openDialog("New group");
+
+    expect(screen.getByRole("dialog", { name: "Create group" })).toBeInTheDocument();
+    expect(within(form("Create group")).getByLabelText("Name")).toHaveFocus();
+  });
+
+  it("sends nothing when cancelled", async () => {
+    await renderGroups();
+    await openDialog("New group");
+    await userEvent.type(within(form("Create group")).getByLabelText("Name"), "Goa");
+
+    await userEvent.click(within(form("Create group")).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("form", { name: "Create group" })).toBeNull();
+    expect(createGroup).not.toHaveBeenCalled();
+  });
+
+  it("stays open with the typed name when the name is taken", async () => {
+    vi.mocked(createGroup).mockRejectedValue(new ConflictError("group-name-taken"));
+    await renderGroups();
+
+    await create("Goa 2027");
+
+    expect(await within(form("Create group")).findByRole("alert")).toHaveTextContent(
+      "That group name is already taken.",
+    );
+    expect(within(form("Create group")).getByLabelText("Name")).toHaveValue("Goa 2027");
+    expect(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    ).toBeEnabled();
+  });
+
+  it("opens from the empty My groups state", async () => {
+    await renderGroups();
+
+    await userEvent.click(within(section("My groups")).getByRole("button", { name: "New group" }));
+
+    expect(screen.getByRole("form", { name: "Create group" })).toBeInTheDocument();
   });
 
   it("checks the name before sending", async () => {
@@ -171,6 +259,7 @@ describe("creating a group", () => {
 
 describe("asking to join", () => {
   async function requestByName(name: string) {
+    await openDialog("Join by name");
     await userEvent.type(within(form("Request to join")).getByLabelText("Group name"), name);
     await userEvent.click(
       within(form("Request to join")).getByRole("button", { name: "Send request" }),
@@ -180,7 +269,7 @@ describe("asking to join", () => {
   it("asks from the browse list and shows the request as pending", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoin).mockResolvedValue(PENDING);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.click(await screen.findByRole("button", { name: "Request to join Goa 2027" }));
 
@@ -196,7 +285,7 @@ describe("asking to join", () => {
   ])("shows a message when asking from the list fails with %O", async (error, message) => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoin).mockRejectedValue(error);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.click(await screen.findByRole("button", { name: "Request to join Goa 2027" }));
 
@@ -206,16 +295,29 @@ describe("asking to join", () => {
   it("asks by name and marks the listed group pending", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoinByName).mockResolvedValue(PENDING);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
     await screen.findByRole("button", { name: "Request to join Goa 2027" });
 
     await requestByName(" goa 2027 ");
 
     expect(requestToJoinByName).toHaveBeenCalledWith("goa 2027");
-    expect(await within(form("Request to join")).findByRole("status")).toHaveTextContent(
-      "Request sent.",
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Request sent. The owner will decide.",
     );
+    expect(screen.queryByRole("form", { name: "Request to join" })).toBeNull();
     expect(within(section("Browse groups")).getByText("Request pending")).toBeInTheDocument();
+  });
+
+  it("stays open with the typed name when no group has it", async () => {
+    vi.mocked(requestToJoinByName).mockRejectedValue(new NotFoundError(404));
+    await renderGroups();
+
+    await requestByName("Nowhere");
+
+    expect(await within(form("Request to join")).findByRole("alert")).toHaveTextContent(
+      "No group has that name.",
+    );
+    expect(within(form("Request to join")).getByLabelText("Group name")).toHaveValue("Nowhere");
   });
 
   it.each([
@@ -259,7 +361,7 @@ describe("searching", () => {
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
 
     expect(browseGroups).toHaveBeenLastCalledWith("goa");
-    expect(await screen.findByRole("button", { name: "Monsoon in Goa" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Monsoon in Goa" })).toBeInTheDocument();
   });
 
   it("sends no term for an empty search", async () => {
@@ -282,15 +384,55 @@ describe("searching", () => {
     );
     expect(browseGroups).not.toHaveBeenCalled();
   });
+
+  it("offers to clear a search that found nothing, and reloads the full list", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group()]);
+    renderRoutes();
+    await screen.findByRole("link", { name: "Goa 2027" });
+    vi.mocked(browseGroups).mockResolvedValueOnce([]);
+    await userEvent.type(screen.getByLabelText("Search by name"), "Ladakh");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await screen.findByText("No groups found.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(browseGroups).toHaveBeenLastCalledWith(undefined);
+    expect(screen.getByLabelText("Search by name")).toHaveValue("");
+    expect(await screen.findByRole("link", { name: "Goa 2027" })).toBeInTheDocument();
+  });
+
+  it("offers no clear button when nothing was searched", async () => {
+    await renderGroups();
+
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+  });
+
+  it("offers no clear button for a term that failed its check and was never sent", async () => {
+    await renderGroups();
+
+    await userEvent.type(screen.getByLabelText("Search by name"), "100%");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(screen.getByText("No groups found.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+  });
+
+  it("shows the search rule before the member fails it", async () => {
+    await renderGroups();
+
+    expect(screen.getByLabelText("Search by name")).toHaveAccessibleDescription(
+      "Part of a group's name: letters, digits, spaces and - ' & . ,",
+    );
+  });
 });
 
 describe("group detail", () => {
   async function open(detailToShow: GroupDetail) {
     vi.mocked(browseGroups).mockResolvedValue([group({ my_status: detailToShow.my_status })]);
     vi.mocked(getGroup).mockResolvedValue(detailToShow);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
     await userEvent.click(
-      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
     );
     await screen.findByRole("heading", { name: "Goa 2027" });
   }
@@ -379,9 +521,9 @@ describe("group detail", () => {
   ])("shows a message when loading fails with %O", async (error, message) => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(getGroup).mockRejectedValue(error);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Goa 2027" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Goa 2027" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
@@ -389,9 +531,9 @@ describe("group detail", () => {
   it("returns to sign-in when loading finds the session gone", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(getGroup).mockRejectedValue(new SignedOutError(401));
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Goa 2027" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Goa 2027" }));
 
     await vi.waitFor(() => {
       expect(onSignedOut).toHaveBeenCalled();
@@ -401,11 +543,238 @@ describe("group detail", () => {
   it("goes back to the home view and reloads its lists", async () => {
     await open(detail());
     const loadsBefore = vi.mocked(getMyGroups).mock.calls.length;
+    const browsesBefore = vi.mocked(browseGroups).mock.calls.length;
 
-    await userEvent.click(screen.getByRole("button", { name: "Back to groups" }));
+    await userEvent.click(screen.getByRole("link", { name: "Back to groups" }));
 
     expect(await screen.findByRole("region", { name: "My groups" })).toBeInTheDocument();
     expect(getMyGroups).toHaveBeenCalledTimes(loadsBefore + 1);
+    expect(browseGroups).toHaveBeenCalledTimes(browsesBefore + 1);
+    expect(document.title).toBe("Groups · Caravan");
+  });
+
+  it("links each group to its own address and names the tab after it", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group()]);
+    renderRoutes();
+
+    expect(
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
+    ).toHaveAttribute("href", "/groups/1");
+
+    vi.mocked(getGroup).mockResolvedValue(detail());
+    await userEvent.click(within(section("Browse groups")).getByRole("link", { name: "Goa 2027" }));
+    await screen.findByRole("heading", { name: "Goa 2027" });
+    expect(document.title).toBe("Goa 2027 · Caravan");
+  });
+});
+
+describe("routes", () => {
+  it.each(["/groups/abc", "/groups/0", "/groups/-1", "/groups/07", "/groups/99999999999999999999"])(
+    "%s is not found, without asking for a group",
+    async (path) => {
+      renderRoutes(path);
+
+      expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+      expect(getGroup).not.toHaveBeenCalled();
+    },
+  );
+
+  it("shows page not found for an unknown address, with a link home", async () => {
+    renderRoutes("/nowhere");
+
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to your groups" })).toHaveAttribute("href", "/");
+    expect(document.title).toBe("Page not found · Caravan");
+    expect(getMyGroups).not.toHaveBeenCalled();
+  });
+
+  it("opens a group straight from its address", async () => {
+    vi.mocked(getGroup).mockResolvedValue(detail({ group_id: 42, name: "Ladakh" }));
+
+    renderRoutes("/groups/42");
+
+    expect(await screen.findByRole("heading", { name: "Ladakh" })).toBeInTheDocument();
+    expect(getGroup).toHaveBeenCalledWith(42);
+    expect(getMyGroups).not.toHaveBeenCalled();
+  });
+
+  it("names the tab when the group no longer exists, and links home", async () => {
+    vi.mocked(getGroup).mockRejectedValue(new NotFoundError(404));
+
+    renderRoutes("/groups/42");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("That group no longer exists.");
+    expect(screen.getByRole("link", { name: "Back to groups" })).toHaveAttribute("href", "/");
+    expect(document.title).toBe("Group not found · Caravan");
+  });
+});
+
+describe("while a request is in flight", () => {
+  // A request that never answers, so the button stays busy for the second click.
+  const inFlight = () => new Promise<never>(() => undefined);
+
+  it("sends one create for a double click", async () => {
+    vi.mocked(createGroup).mockReturnValue(inFlight());
+    await renderGroups();
+    await openDialog("New group");
+    await userEvent.type(within(form("Create group")).getByLabelText("Name"), "Goa");
+
+    await userEvent.dblClick(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    );
+
+    expect(createGroup).toHaveBeenCalledTimes(1);
+    expect(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    ).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("sends one request by name for a double click", async () => {
+    vi.mocked(requestToJoinByName).mockReturnValue(inFlight());
+    await renderGroups();
+    await openDialog("Join by name");
+    await userEvent.type(within(form("Request to join")).getByLabelText("Group name"), "Goa");
+
+    await userEvent.dblClick(
+      within(form("Request to join")).getByRole("button", { name: "Send request" }),
+    );
+
+    expect(requestToJoinByName).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends one request from the list for a double click", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group()]);
+    vi.mocked(requestToJoin).mockReturnValue(inFlight());
+    renderRoutes();
+
+    await userEvent.dblClick(
+      await screen.findByRole("button", { name: "Request to join Goa 2027" }),
+    );
+
+    expect(requestToJoin).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Request to join Goa 2027" })).toBeDisabled();
+  });
+
+  it("sends one search for a double click", async () => {
+    await renderGroups();
+    vi.mocked(browseGroups).mockClear().mockReturnValue(inFlight());
+    await userEvent.type(screen.getByLabelText("Search by name"), "Goa");
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Search" }));
+
+    expect(browseGroups).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Search" })).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("sends one unfiltered browse for a double click on Clear search", async () => {
+    await renderGroups();
+    await userEvent.type(screen.getByLabelText("Search by name"), "Goa");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    vi.mocked(browseGroups).mockClear().mockReturnValue(inFlight());
+
+    await userEvent.dblClick(await screen.findByRole("button", { name: "Clear search" }));
+
+    expect(browseGroups).toHaveBeenCalledTimes(1);
+    expect(browseGroups).toHaveBeenCalledWith(undefined);
+  });
+
+  it("keeps a later request busy when an earlier one answers first", async () => {
+    let answerGoa: (request: typeof PENDING) => void = () => undefined;
+    vi.mocked(browseGroups).mockResolvedValue([group(), group({ group_id: 2, name: "Kerala" })]);
+    vi.mocked(requestToJoin)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerGoa = resolve;
+        }),
+      )
+      .mockReturnValueOnce(inFlight());
+    renderRoutes();
+    await userEvent.click(await screen.findByRole("button", { name: "Request to join Goa 2027" }));
+    await userEvent.click(screen.getByRole("button", { name: "Request to join Kerala" }));
+
+    answerGoa(PENDING);
+
+    expect(
+      await within(section("Browse groups")).findByText("Request pending"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Request to join Kerala" })).toBeDisabled();
+  });
+
+  it("sends one decision for a double click, and holds both buttons", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "owner" })]);
+    vi.mocked(getGroup).mockResolvedValue(
+      detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }),
+    );
+    vi.mocked(approve).mockReturnValue(inFlight());
+    renderRoutes();
+    await userEvent.click(
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
+    );
+
+    await userEvent.dblClick(await screen.findByRole("button", { name: "Approve Bob" }));
+
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Reject Bob" })).toBeDisabled();
+  });
+});
+
+describe("marking invalid fields", () => {
+  it("marks the group name invalid when its check fails", async () => {
+    await renderGroups();
+    await openDialog("New group");
+    const name = within(form("Create group")).getByLabelText("Name");
+
+    await userEvent.type(name, "Goa_2027");
+    await userEvent.click(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    );
+
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(name).toHaveAccessibleDescription(/^Up to 60 letters/);
+  });
+
+  it("marks the search term invalid when its check fails", async () => {
+    await renderGroups();
+    const search = screen.getByLabelText("Search by name");
+
+    await userEvent.type(search, "100%");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(search).toHaveAttribute("aria-invalid", "true");
+  });
+});
+
+describe("status badges", () => {
+  it("shows the member's status on the group screen", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "member" })]);
+    vi.mocked(getGroup).mockResolvedValue(detail({ my_status: "member", members: [] }));
+    renderRoutes();
+
+    await userEvent.click(
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
+    );
+
+    expect(await screen.findByText("You're a member")).toHaveClass("badge--member");
+  });
+
+  it("shows an avatar beside each member and requester", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "owner" })]);
+    vi.mocked(getGroup).mockResolvedValue(
+      detail({
+        members: [{ display_name: "Ada Lovelace" }],
+        pending_requests: [{ request_id: 7, display_name: "Bob" }],
+      }),
+    );
+    renderRoutes();
+
+    await userEvent.click(
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
+    );
+
+    expect(await within(section("Members")).findByText("AL")).toHaveClass("avatar");
+    expect(within(section("Pending requests")).getByText("B")).toHaveClass("avatar");
+    expect(screen.getByRole("button", { name: "Approve Bob" })).toHaveClass("button--primary");
+    expect(screen.getByRole("button", { name: "Reject Bob" })).toHaveClass("button--danger");
   });
 });
 
@@ -423,9 +792,9 @@ describe("rendering untrusted text", () => {
         pending_requests: [{ request_id: 7, display_name: markup }],
       }),
     );
-    const { container } = render(<Groups onSignedOut={onSignedOut} />);
+    const { container } = renderRoutes();
 
-    await userEvent.click(await screen.findByRole("button", { name: markup }));
+    await userEvent.click(await screen.findByRole("link", { name: markup }));
 
     expect(await screen.findByRole("heading", { name: markup })).toBeInTheDocument();
     expect(screen.getAllByText(markup).length).toBeGreaterThanOrEqual(3);
