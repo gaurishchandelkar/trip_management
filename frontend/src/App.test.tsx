@@ -1,13 +1,16 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import {
   browseGroups,
   ConflictError,
+  getGroup,
   getMe,
   getMyGroups,
+  type GroupDetail,
   InvalidInputError,
   register,
   SignedOutError,
@@ -19,6 +22,7 @@ import {
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   browseGroups: vi.fn(),
+  getGroup: vi.fn(),
   getMe: vi.fn(),
   getMyGroups: vi.fn(),
   register: vi.fn(),
@@ -28,6 +32,14 @@ vi.mock("./api", async (importOriginal) => ({
 
 const ADA = { user_id: "ada", display_name: "Ada Lovelace" };
 
+function renderApp(path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getMyGroups).mockResolvedValue([]);
@@ -36,7 +48,7 @@ beforeEach(() => {
 
 async function renderSignedOut() {
   vi.mocked(getMe).mockRejectedValue(new SignedOutError(401));
-  render(<App />);
+  renderApp();
   await screen.findByRole("heading", { name: "Sign in" });
 }
 
@@ -66,7 +78,7 @@ describe("App session", () => {
   it("shows loading, then the sign-in and register forms with labels", async () => {
     vi.mocked(getMe).mockRejectedValue(new SignedOutError(401));
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByText("Loading…")).toBeInTheDocument();
     expect(await screen.findByRole("form", { name: "Sign in" })).toBeInTheDocument();
@@ -88,7 +100,7 @@ describe("App session", () => {
   it("goes straight to the signed-in view when a session exists", async () => {
     vi.mocked(getMe).mockResolvedValue(ADA);
 
-    render(<App />);
+    renderApp();
 
     expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
@@ -97,7 +109,7 @@ describe("App session", () => {
   it("shows the unavailable message when the session check fails", async () => {
     vi.mocked(getMe).mockRejectedValue(new UnavailableError(503));
 
-    render(<App />);
+    renderApp();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Something went wrong, please try again.",
@@ -182,7 +194,7 @@ describe("signing in and out", () => {
   it("signs out and returns to the sign-in form", async () => {
     vi.mocked(getMe).mockResolvedValue(ADA);
     vi.mocked(signOut).mockResolvedValue();
-    render(<App />);
+    renderApp();
 
     await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
 
@@ -192,7 +204,7 @@ describe("signing in and out", () => {
   it("returns to the sign-in form when the session already ended", async () => {
     vi.mocked(getMe).mockResolvedValue(ADA);
     vi.mocked(signOut).mockRejectedValue(new SignedOutError(401));
-    render(<App />);
+    renderApp();
 
     await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
 
@@ -202,12 +214,83 @@ describe("signing in and out", () => {
   it("stays signed in and shows an alert when sign-out fails", async () => {
     vi.mocked(getMe).mockResolvedValue(ADA);
     vi.mocked(signOut).mockRejectedValue(new UnavailableError(503));
-    render(<App />);
+    renderApp();
 
     await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
     expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+  });
+});
+
+describe("app shell", () => {
+  const GROUP: GroupDetail = {
+    group_id: 7,
+    name: "Goa 2027",
+    description: "",
+    owner_display_name: "Ada",
+    member_count: 1,
+    my_status: "owner",
+    members: [],
+    pending_requests: [],
+  };
+
+  it("shows the brand as the page heading, linking home", async () => {
+    await renderSignedOut();
+
+    const brand = screen.getByRole("heading", { level: 1, name: "Caravan" });
+    expect(within(brand).getByRole("link", { name: "Caravan" })).toHaveAttribute("href", "/");
+    expect(document.title).toBe("Sign in · Caravan");
+  });
+
+  it("moves focus to the main content from the skip link", async () => {
+    await renderSignedOut();
+
+    await userEvent.click(screen.getByRole("link", { name: "Skip to content" }));
+
+    expect(screen.getByRole("main")).toHaveFocus();
+  });
+
+  it("shows the signed-in member beside their avatar", async () => {
+    vi.mocked(getMe).mockResolvedValue(ADA);
+
+    renderApp();
+
+    const banner = screen.getByRole("banner");
+    expect(await within(banner).findByText("AL")).toHaveClass("avatar");
+    expect(within(banner).getByText("Signed in as")).toHaveTextContent("Signed in as Ada Lovelace");
+    expect(document.title).toBe("Groups · Caravan");
+  });
+
+  it("keeps the address when the session ends, and returns there after signing in", async () => {
+    vi.mocked(getMe).mockResolvedValue(ADA);
+    vi.mocked(getGroup).mockRejectedValueOnce(new SignedOutError(401)).mockResolvedValue(GROUP);
+    vi.mocked(signIn).mockResolvedValue(ADA);
+    renderApp("/groups/7");
+
+    await screen.findByRole("form", { name: "Sign in" });
+    await fillSignIn("ada", "anything");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Goa 2027" })).toBeInTheDocument();
+    expect(getGroup).toHaveBeenCalledTimes(2);
+    expect(getGroup).toHaveBeenLastCalledWith(7);
+    expect(getMyGroups).not.toHaveBeenCalled();
+    expect(document.title).toBe("Goa 2027 · Caravan");
+  });
+
+  it("starts at home after an explicit sign-out", async () => {
+    vi.mocked(getMe).mockResolvedValue(ADA);
+    vi.mocked(getGroup).mockResolvedValue(GROUP);
+    vi.mocked(signOut).mockResolvedValue();
+    vi.mocked(signIn).mockResolvedValue(ADA);
+    renderApp("/groups/7");
+    await screen.findByRole("heading", { level: 2, name: "Goa 2027" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await fillSignIn("ada", "anything");
+
+    expect(await screen.findByRole("region", { name: "My groups" })).toBeInTheDocument();
+    expect(getGroup).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -250,7 +333,7 @@ describe("rendering untrusted text", () => {
     const markup = "<img src=x onerror=alert(1)>";
     vi.mocked(getMe).mockResolvedValue({ user_id: "eve", display_name: markup });
 
-    const { container } = render(<App />);
+    const { container } = renderApp();
 
     expect(await screen.findByText(markup)).toBeInTheDocument();
     expect(container.querySelector("img")).toBeNull();

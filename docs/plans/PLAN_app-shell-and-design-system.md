@@ -103,26 +103,34 @@ Success criteria:
 - `frontend/index.html`: title "Caravan", `<link rel="icon" href="/favicon.svg">`, and `<meta name="theme-color">` in the brand coral. Add `frontend/public/favicon.svg`.
 - E2E helpers: `open_group` uses `role="link"`. Add `load_path(page, path)`, which waits for `GET /api/me` like `load`.
 
+Notes from implementation:
+- `react-router` installed at **8.5.0**, not 7.x: 8.x is the current release. Its declarative API (`BrowserRouter`, `Routes`, `Route`, `Link`, `useParams`, `useNavigate`, `MemoryRouter`) is unchanged, its peers are React 19.2+, and it needs Node 22.22+, which `.nvmrc` (24) meets.
+- `load(page, path="/")` gained an optional path instead of adding a separate `load_path`.
+- The signed-in routes live in `AppRoutes.tsx`, so `App` and the vitest suites share one route table.
+- A missing group sets the title "Group not found · Caravan", a fifth title the spec's list didn't name.
+- `/groups/07` (a leading zero) is also not found, since `^[1-9][0-9]*$` is the rule.
+- The shell journey (`test_shell_shows_the_brand_title_and_icon`) makes exactly the sign-in calls, so it's added to the `@covers` of the existing `test_sign_in_loads_my_groups_and_the_browse_list_once` rather than duplicating that inside test.
+
 Success criteria:
-- [ ] Vitest: `GroupRoute` renders NotFound with no `getGroup` call for `/groups/abc`, `/groups/0`, `/groups/-1` and `/groups/99999999999999999999`
-- [ ] Vitest: an unknown path renders "Page not found" with a link to `/`. Each screen sets the expected `document.title`
-- [ ] Vitest: a `401` on `/groups/7` shows sign-in at the same path, and signing in renders the group again
-- [ ] Vitest (updated): "goes back to the home view and reloads its lists" now follows the Back link and asserts one call to each list
-- [ ] E2E outside: opening a group from My groups changes the URL to `/groups/{id}`, and `page.go_back()` returns to `/` with both lists visible
-- [ ] E2E inside (`@covers` the outside test above): after `page.go_back()`, the calls are exactly `[MY_GROUPS, BROWSE]`
-- [ ] E2E outside: a signed-in member who loads `/groups/{id}` directly, or refreshes it, sees the group heading
-- [ ] E2E inside: direct load sends exactly `[ME, GET /api/groups/{id}]`
-- [ ] E2E outside: a signed-out visitor who loads `/groups/{id}` sees sign-in, and after signing in sees the group at the same URL
-- [ ] E2E inside: the calls are exactly `[ME, SIGN_IN, GET /api/groups/{id}]`
-- [ ] E2E outside: `/nowhere` and `/groups/abc` show "Page not found", and the link returns home
-- [ ] E2E inside: the only call is `[ME]`
-- [ ] E2E outside: a group that doesn't exist shows "That group no longer exists." with a link home
-- [ ] E2E outside: the first Tab focuses "Skip to content", and Enter moves focus to `main`
-- [ ] E2E outside: the banner shows "Caravan". `page.title()` is "Groups · Caravan" on Home and "{name} · Caravan" on a group. `/favicon.svg` returns `200`, and the `theme-color` meta is present
-- [ ] E2E (existing, updated selectors only): every existing journey passes, `test_shows_alert_when_backend_fails` passes with the alert inside the shell, and "Signed in as Ada Lovelace" is still found
-- [ ] `vite preview` SPA fallback: a direct load of `/groups/1` serves the app (covered by the direct-load tests above), and `GET /api/groups/1` still reaches the backend (asserted in the inside test)
-- [ ] Every new outside journey has a paired inside test. `node --test scripts/harness-config.test.mjs` passes
-- [ ] `npm run check` passes
+- [x] Vitest: `GroupRoute` renders NotFound with no `getGroup` call for `/groups/abc`, `/groups/0`, `/groups/-1`, `/groups/07` and `/groups/99999999999999999999` (`routes` suite)
+- [x] Vitest: an unknown path renders "Page not found" with a link to `/`. Each screen sets the expected `document.title` (Sign in, Groups, group name, Page not found, Group not found)
+- [x] Vitest: a `401` on `/groups/7` shows sign-in at the same path, and signing in renders the group again (`keeps the address when the session ends...`)
+- [x] Vitest (updated): "goes back to the home view and reloads its lists" now follows the Back link and asserts one call to each list
+- [x] E2E outside: `test_opening_a_group_gives_it_an_address_and_back_returns_home`
+- [x] E2E inside: `test_back_reloads_each_home_list_once` asserts exactly `[MY_GROUPS, BROWSE]`
+- [x] E2E outside: `test_a_group_address_opens_directly_and_survives_a_refresh`
+- [x] E2E inside: `test_group_address_checks_the_session_then_loads_only_that_group` asserts exactly `[ME, GET /api/groups/{id}]`
+- [x] E2E outside: `test_signed_out_visitor_lands_on_the_group_after_signing_in`
+- [x] E2E inside: `test_signing_in_on_a_group_address_loads_only_that_group` asserts exactly `[ME, SIGN_IN, GET /api/groups/{id}]` (401, 200, 200)
+- [x] E2E outside: `test_unknown_address_shows_page_not_found[/nowhere|/groups/abc]`
+- [x] E2E inside: `test_unknown_address_makes_no_call_after_the_session_check` asserts only `[ME]`
+- [x] E2E outside: `test_missing_group_says_so`, paired with `test_missing_group_asks_once_and_gets_a_generic_404`
+- [x] E2E outside: `test_skip_link_moves_focus_to_the_main_content`, paired with `test_skip_link_makes_no_calls`
+- [x] E2E outside: `test_shell_shows_the_brand_title_and_icon`
+- [x] E2E (existing, updated selectors only): every existing journey passes, including `test_shows_alert_when_backend_fails` and "Signed in as Ada Lovelace" (47 passed)
+- [x] `vite preview` SPA fallback: direct loads of `/groups/{id}` serve the app, and `GET /api/groups/{id}` reaches the backend (asserted in the inside tests)
+- [x] Every new outside journey has a paired inside test. `node --test scripts/harness-config.test.mjs` passes (8/8)
+- [x] `npm run check` passes (build, lint, unit, integration; functional: 47 passed)
 
 ## Phase 3: Home layout, dialogs and signed-out layout
 

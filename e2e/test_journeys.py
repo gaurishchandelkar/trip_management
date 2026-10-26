@@ -1,15 +1,19 @@
 """Outside (black-box) journeys: only what the user sees."""
 
+import re
 from collections.abc import Iterator
 from typing import Literal
+from urllib.parse import urlsplit
 
 import pytest
 from playwright.sync_api import Browser, Dialog, Page, expect
 
 from e2e.app import (
     api,
+    back_to_home,
     create_group,
     form,
+    group_path,
     load,
     load_home,
     load_signed_out,
@@ -125,7 +129,7 @@ def test_owner_approves_a_member_who_found_the_group_by_browsing(
     name = unique_group_name("Goa")
     register_and_sign_in(ada, unique_user_id("ada"), "Ada")
     create_group(ada, name, "Beach week")
-    expect(section(ada, "My groups").get_by_role("button", name=name)).to_be_visible()
+    expect(section(ada, "My groups").get_by_role("link", name=name)).to_be_visible()
 
     register_and_sign_in(bob, unique_user_id("bob"), "Bob")
     search_groups(bob, name)
@@ -216,3 +220,105 @@ def test_theme_follows_the_system_colour_scheme(
 
     expect(page.locator("body")).to_have_css("background-color", background)
     expect(page.locator("body")).to_have_css("color", text)
+
+
+def _group_request(response_url: str) -> bool:
+    return urlsplit(response_url).path.startswith("/api/groups/")
+
+
+def test_shell_shows_the_brand_title_and_icon(page: Page) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada Lovelace")
+
+    expect(page.get_by_role("banner").get_by_role("link", name="Caravan")).to_be_visible()
+    expect(page).to_have_title("Groups · Caravan")
+    expect(page.locator('meta[name="theme-color"]')).to_have_attribute("content", "#e8552f")
+    icon = page.locator('link[rel="icon"]').get_attribute("href")
+    assert icon == "/favicon.svg"
+    assert page.request.get(icon).status == 200
+
+
+def test_skip_link_moves_focus_to_the_main_content(page: Page) -> None:
+    load_signed_out(page)
+
+    page.keyboard.press("Tab")
+    skip = page.get_by_role("link", name="Skip to content")
+    expect(skip).to_be_focused()
+    expect(skip).to_be_in_viewport()
+    page.keyboard.press("Enter")
+
+    expect(page.get_by_role("main")).to_be_focused()
+
+
+def test_opening_a_group_gives_it_an_address_and_back_returns_home(page: Page) -> None:
+    name = unique_group_name("Goa")
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    create_group(page, name)
+
+    open_group(page, "My groups", name)
+    expect(page).to_have_url(re.compile(r"/groups/[1-9][0-9]*$"))
+    expect(page).to_have_title(f"{name} · Caravan")
+
+    back_to_home(page)
+    expect(page).to_have_url(re.compile(r"^[^?#]*//[^/]+/$"))
+    expect(section(page, "My groups").get_by_role("link", name=name)).to_be_visible()
+    expect(page).to_have_title("Groups · Caravan")
+
+
+def test_a_group_address_opens_directly_and_survives_a_refresh(page: Page) -> None:
+    name = unique_group_name("Goa")
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    create_group(page, name)
+    open_group(page, "My groups", name)
+    address = group_path(page)
+
+    with page.expect_response(lambda r: _group_request(r.url)):
+        load(page, address)
+    expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
+
+    with page.expect_response(lambda r: _group_request(r.url)):
+        page.reload()
+    expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
+
+
+def test_signed_out_visitor_lands_on_the_group_after_signing_in(page: Page) -> None:
+    name = unique_group_name("Goa")
+    user_id = unique_user_id("ada")
+    register_and_sign_in(page, user_id, "Ada")
+    create_group(page, name)
+    open_group(page, "My groups", name)
+    address = group_path(page)
+    sign_out(page)
+
+    load(page, address)
+    expect(form(page, "Sign in")).to_be_visible()
+    with page.expect_response(lambda r: _group_request(r.url)):
+        sign_in(page, user_id)
+
+    expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
+    assert urlsplit(page.url).path == address
+
+
+@pytest.mark.parametrize("path", ["/nowhere", "/groups/abc"])
+def test_unknown_address_shows_page_not_found(page: Page, path: str) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+
+    load(page, path)
+
+    expect(page.get_by_role("heading", name="Page not found")).to_be_visible()
+    expect(page).to_have_title("Page not found · Caravan")
+    with (
+        page.expect_response(api("GET", "/api/me/groups")),
+        page.expect_response(api("GET", "/api/groups")),
+    ):
+        page.get_by_role("link", name="Go to your groups").click()
+    expect(section(page, "My groups")).to_be_visible()
+
+
+def test_missing_group_says_so(page: Page) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+
+    with page.expect_response(api("GET", "/api/groups/999999999")):
+        load(page, "/groups/999999999")
+
+    expect(page.get_by_role("alert")).to_have_text("That group no longer exists.")
+    expect(page.get_by_role("link", name="Back to groups")).to_have_attribute("href", "/")

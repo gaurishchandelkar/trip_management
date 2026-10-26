@@ -78,6 +78,7 @@ const PAIRS: [foreground: string, background: string, minimum: number][] = [
   ["--color-focus", "--color-surface", NON_TEXT],
   ["--color-focus", "--color-bg", NON_TEXT],
   ["--color-brand", "--color-surface", NON_TEXT],
+  ["--color-on-brand", "--color-brand", NON_TEXT],
 ];
 
 describe.each([

@@ -24,6 +24,7 @@
 
 - **App shell and design system** (`docs/plans/PLAN_app-shell-and-design-system.md`), branch `feat/app-shell-and-design-system`.
   - Phase 1 done: design tokens with light and dark themes (`frontend/src/theme/`), reusable components (`frontend/src/ui/`), and every screen restyled with unchanged names, messages and API calls. A token contrast test and a raw-colour scan guard the theme.
+  - Phase 2 done: the Caravan app shell (banner, skip link, page titles, favicon) and `react-router` routes `/`, `/groups/:groupId` and a not-found page. Back, refresh and direct links work, and signing in returns to the address the session ended on.
 
 ## Known gaps
 

@@ -3,14 +3,129 @@
 .app {
   width: min(var(--content-width), 100% - 2 * var(--space-4));
   margin-inline: auto;
-  padding-block: var(--space-6) var(--space-12);
+  padding-block: var(--space-8) var(--space-12);
   display: grid;
   gap: var(--space-6);
 }
 
-.app__title {
-  font-size: var(--text-2xl);
-  letter-spacing: -0.02em;
+/* Focus lands here from the skip link; the content itself shows where the reader is. */
+.app:focus {
+  outline: none;
+}
+
+/* Skip link: hidden until focused */
+
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 10;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  font-weight: var(--weight-semibold);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+/* App header */
+
+.app-header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.app-header__inner {
+  width: min(var(--content-width), 100% - 2 * var(--space-4));
+  min-height: 4rem;
+  margin-inline: auto;
+  padding-block: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.brand {
+  font-size: var(--text-lg);
+  letter-spacing: -0.01em;
+}
+
+.brand__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.logo {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+}
+
+.logo__tile {
+  fill: var(--color-brand);
+}
+
+.logo__route {
+  stroke: var(--color-on-brand);
+  opacity: 0.6;
+}
+
+.logo__stop {
+  fill: var(--color-on-brand);
+}
+
+.app-header__session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.app-header__name {
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-header__name strong {
+  color: var(--color-text);
+}
+
+.app-header__session .callout {
+  flex-basis: 100%;
+}
+
+/* Links that move between screens */
+
+.back-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.not-found {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
 }
 
 .meta {
@@ -45,25 +160,6 @@
   display: grid;
   gap: var(--space-6);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-}
-
-/* Signed-in header */
-
-.session {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.session__name {
-  flex: 1 1 12rem;
-  min-width: 0;
-  color: var(--color-text-muted);
-}
-
-.session__name strong {
-  color: var(--color-text);
 }
 
 /* Home */
@@ -122,7 +218,14 @@
 .group-card__name {
   min-width: 0;
   font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
   line-height: var(--leading-tight);
+  text-decoration-color: transparent;
+  transition: text-decoration-color var(--duration-fast) var(--ease);
+}
+
+.group-card__name:hover {
+  text-decoration-color: currentColor;
 }
 
 .group-card__description {
@@ -143,10 +246,6 @@
 .group {
   display: grid;
   gap: var(--space-5);
-}
-
-.group__back {
-  justify-self: start;
 }
 
 .group__header {

@@ -80,26 +80,6 @@
   background: var(--color-danger-hover);
 }
 
-/* A button that reads as a link, for opening a group. */
-.link-button {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--color-link);
-  font: inherit;
-  font-weight: var(--weight-semibold);
-  text-align: start;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 0.15em;
-  cursor: pointer;
-  transition: text-decoration-color var(--duration-fast) var(--ease);
-}
-
-.link-button:hover {
-  text-decoration-color: currentColor;
-}
-
 /* Field */
 
 .field {

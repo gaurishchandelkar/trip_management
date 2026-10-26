@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router";
 
 import {
   approve,
@@ -11,15 +12,16 @@ import {
   SignedOutError,
 } from "./api";
 import { alert, type Feedback, FeedbackMessage, messageFor } from "./Feedback";
+import { NotFound } from "./NotFound";
 import { Avatar } from "./ui/Avatar";
 import { StatusBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Icon } from "./ui/Icon";
 import { Skeleton } from "./ui/Skeleton";
+import { useDocumentTitle } from "./useDocumentTitle";
 
 interface GroupViewProps {
   groupId: number;
-  onBack: () => void;
   onSignedOut: () => void;
 }
 
@@ -77,7 +79,18 @@ function PendingRequests({
   );
 }
 
-export function GroupView({ groupId, onBack, onSignedOut }: GroupViewProps) {
+const GROUP_ID = /^[1-9][0-9]*$/;
+
+/** Opens `/groups/:groupId`. Anything but a positive whole number is not found, with no call. */
+export function GroupRoute({ onSignedOut }: { onSignedOut: () => void }) {
+  const { groupId = "" } = useParams();
+  const id = GROUP_ID.test(groupId) ? Number(groupId) : Number.NaN;
+  if (!Number.isSafeInteger(id)) return <NotFound />;
+  // Keyed, so moving between groups starts each one fresh.
+  return <GroupView key={id} groupId={id} onSignedOut={onSignedOut} />;
+}
+
+function GroupView({ groupId, onSignedOut }: GroupViewProps) {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [deciding, setDeciding] = useState<number | null>(null);
@@ -111,11 +124,20 @@ export function GroupView({ groupId, onBack, onSignedOut }: GroupViewProps) {
       });
   }
 
+  useDocumentTitle(
+    loaded.status === "ready"
+      ? loaded.group.name
+      : loaded.status === "missing"
+        ? "Group not found"
+        : null,
+  );
+
   return (
     <section className="group" aria-labelledby="group-heading">
-      <Button variant="ghost" className="group__back" onClick={onBack}>
+      <Link to="/" className="back-link">
+        <Icon name="arrow-left" />
         Back to groups
-      </Button>
+      </Link>
       {loaded.status === "loading" && <Skeleton rows={2} />}
       {loaded.status === "missing" && (
         <FeedbackMessage feedback={alert("That group no longer exists.")} />

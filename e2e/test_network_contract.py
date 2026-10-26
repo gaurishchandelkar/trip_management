@@ -11,8 +11,10 @@ from playwright.sync_api import Browser, Page, expect
 
 from e2e.app import (
     api,
+    back_to_home,
     create_group,
     form,
+    group_path,
     load,
     load_home,
     load_signed_out,
@@ -142,7 +144,7 @@ def test_sign_out_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     assert (calls[-1].status, calls[-1].request_body) == (204, None)
 
 
-@covers("test_register_sign_in_and_see_display_name")
+@covers("test_register_sign_in_and_see_display_name", "test_shell_shows_the_brand_title_and_icon")
 def test_sign_in_loads_my_groups_and_the_browse_list_once(page: Page, traffic: ApiTraffic) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
 
@@ -177,7 +179,7 @@ def test_browse_search_sends_one_query(page: Page, traffic: ApiTraffic) -> None:
     before = len(traffic.api_calls())
 
     search_groups(page, name.lower())
-    expect(section(page, "Browse groups").get_by_role("button", name=name)).to_be_visible()
+    expect(section(page, "Browse groups").get_by_role("link", name=name)).to_be_visible()
 
     calls = traffic.api_calls()[before:]
     assert [call.signature for call in calls] == [("GET", "/api/groups", {"q": [name.lower()]})], (
@@ -381,3 +383,107 @@ def test_dark_theme_needs_no_api_calls(page: Page, traffic: ApiTraffic) -> None:
 
     calls = traffic.api_calls()
     assert [call.signature for call in calls] == [ME], traffic.describe()
+
+
+@covers("test_skip_link_moves_focus_to_the_main_content")
+def test_skip_link_makes_no_calls(page: Page, traffic: ApiTraffic) -> None:
+    load_signed_out(page)
+
+    page.keyboard.press("Tab")
+    page.keyboard.press("Enter")
+    expect(page.get_by_role("main")).to_be_focused()
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls] == [ME], traffic.describe()
+
+
+def _open_new_group(page: Page, user_id: str) -> tuple[str, str]:
+    """Registers and signs in, creates a group and opens it. Returns its name and path."""
+    name = unique_group_name("Goa")
+    register_and_sign_in(page, user_id, "Ada")
+    create_group(page, name)
+    open_group(page, "My groups", name)
+    return name, group_path(page)
+
+
+@covers("test_opening_a_group_gives_it_an_address_and_back_returns_home")
+def test_back_reloads_each_home_list_once(page: Page, traffic: ApiTraffic) -> None:
+    _open_new_group(page, unique_user_id("ada"))
+    before = len(traffic.api_calls())
+
+    back_to_home(page)
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == HOME, traffic.describe()
+    assert [call.status for call in calls] == [200, 200]
+
+
+@covers("test_a_group_address_opens_directly_and_survives_a_refresh")
+def test_group_address_checks_the_session_then_loads_only_that_group(
+    page: Page, traffic: ApiTraffic
+) -> None:
+    name, path = _open_new_group(page, unique_user_id("ada"))
+    before = len(traffic.api_calls())
+
+    with page.expect_response(api("GET", f"/api{path}")):
+        load(page, path)
+    expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [ME, ("GET", f"/api{path}", {})], (
+        traffic.describe()
+    )
+    assert [call.status for call in calls] == [200, 200]
+    assert _json_object(calls[1])["name"] == name
+
+
+@covers("test_signed_out_visitor_lands_on_the_group_after_signing_in")
+def test_signing_in_on_a_group_address_loads_only_that_group(
+    page: Page, traffic: ApiTraffic
+) -> None:
+    user_id = unique_user_id("ada")
+    name, path = _open_new_group(page, user_id)
+    sign_out(page)
+    before = len(traffic.api_calls())
+
+    load(page, path)
+    with page.expect_response(api("GET", f"/api{path}")):
+        sign_in(page, user_id)
+    expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [ME, SIGN_IN, ("GET", f"/api{path}", {})], (
+        traffic.describe()
+    )
+    assert [call.status for call in calls] == [401, 200, 200]
+
+
+@pytest.mark.parametrize("path", ["/nowhere", "/groups/abc"])
+@covers("test_unknown_address_shows_page_not_found")
+def test_unknown_address_makes_no_call_after_the_session_check(
+    page: Page, traffic: ApiTraffic, path: str
+) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    before = len(traffic.api_calls())
+
+    load(page, path)
+    expect(page.get_by_role("heading", name="Page not found")).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [ME], traffic.describe()
+
+
+@covers("test_missing_group_says_so")
+def test_missing_group_asks_once_and_gets_a_generic_404(page: Page, traffic: ApiTraffic) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    before = len(traffic.api_calls())
+
+    with page.expect_response(api("GET", "/api/groups/999999999")):
+        load(page, "/groups/999999999")
+    expect(page.get_by_role("alert")).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [ME, ("GET", "/api/groups/999999999", {})], (
+        traffic.describe()
+    )
+    assert (calls[1].status, calls[1].json()) == (404, {"detail": "Not found"})

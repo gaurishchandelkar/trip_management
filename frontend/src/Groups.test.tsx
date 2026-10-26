@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -19,7 +20,7 @@ import {
   SignedOutError,
   UnavailableError,
 } from "./api";
-import { Groups } from "./Groups";
+import { AppRoutes } from "./AppRoutes";
 
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
@@ -58,8 +59,16 @@ beforeEach(() => {
   vi.mocked(browseGroups).mockResolvedValue([]);
 });
 
+function renderRoutes(path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppRoutes onSignedOut={onSignedOut} />
+    </MemoryRouter>,
+  );
+}
+
 async function renderGroups() {
-  render(<Groups onSignedOut={onSignedOut} />);
+  renderRoutes();
   await screen.findByText("You aren't in any groups yet.");
   await screen.findByText("No groups found.");
 }
@@ -81,10 +90,10 @@ describe("home", () => {
       group({ group_id: 3, name: "Kerala", my_status: "pending" }),
     ]);
 
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     const mine = section("My groups");
-    expect(await within(mine).findByRole("button", { name: "Goa 2027" })).toBeInTheDocument();
+    expect(await within(mine).findByRole("link", { name: "Goa 2027" })).toBeInTheDocument();
     expect(within(mine).getByText("You own this group")).toBeInTheDocument();
     const browse = section("Browse groups");
     expect(await within(browse).findByText("by Bob, 3 members")).toBeInTheDocument();
@@ -96,7 +105,7 @@ describe("home", () => {
   it("returns to sign-in when the session is gone", async () => {
     vi.mocked(getMyGroups).mockRejectedValue(new SignedOutError(401));
 
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await vi.waitFor(() => {
       expect(onSignedOut).toHaveBeenCalled();
@@ -106,7 +115,7 @@ describe("home", () => {
   it("shows the unavailable message when loading fails", async () => {
     vi.mocked(browseGroups).mockRejectedValue(new UnavailableError(503));
 
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
   });
@@ -180,7 +189,7 @@ describe("asking to join", () => {
   it("asks from the browse list and shows the request as pending", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoin).mockResolvedValue(PENDING);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.click(await screen.findByRole("button", { name: "Request to join Goa 2027" }));
 
@@ -196,7 +205,7 @@ describe("asking to join", () => {
   ])("shows a message when asking from the list fails with %O", async (error, message) => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoin).mockRejectedValue(error);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.click(await screen.findByRole("button", { name: "Request to join Goa 2027" }));
 
@@ -206,7 +215,7 @@ describe("asking to join", () => {
   it("asks by name and marks the listed group pending", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoinByName).mockResolvedValue(PENDING);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
     await screen.findByRole("button", { name: "Request to join Goa 2027" });
 
     await requestByName(" goa 2027 ");
@@ -259,7 +268,7 @@ describe("searching", () => {
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
 
     expect(browseGroups).toHaveBeenLastCalledWith("goa");
-    expect(await screen.findByRole("button", { name: "Monsoon in Goa" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Monsoon in Goa" })).toBeInTheDocument();
   });
 
   it("sends no term for an empty search", async () => {
@@ -288,9 +297,9 @@ describe("group detail", () => {
   async function open(detailToShow: GroupDetail) {
     vi.mocked(browseGroups).mockResolvedValue([group({ my_status: detailToShow.my_status })]);
     vi.mocked(getGroup).mockResolvedValue(detailToShow);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
     await userEvent.click(
-      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
     );
     await screen.findByRole("heading", { name: "Goa 2027" });
   }
@@ -379,9 +388,9 @@ describe("group detail", () => {
   ])("shows a message when loading fails with %O", async (error, message) => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(getGroup).mockRejectedValue(error);
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Goa 2027" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Goa 2027" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
@@ -389,9 +398,9 @@ describe("group detail", () => {
   it("returns to sign-in when loading finds the session gone", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(getGroup).mockRejectedValue(new SignedOutError(401));
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Goa 2027" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Goa 2027" }));
 
     await vi.waitFor(() => {
       expect(onSignedOut).toHaveBeenCalled();
@@ -401,11 +410,61 @@ describe("group detail", () => {
   it("goes back to the home view and reloads its lists", async () => {
     await open(detail());
     const loadsBefore = vi.mocked(getMyGroups).mock.calls.length;
+    const browsesBefore = vi.mocked(browseGroups).mock.calls.length;
 
-    await userEvent.click(screen.getByRole("button", { name: "Back to groups" }));
+    await userEvent.click(screen.getByRole("link", { name: "Back to groups" }));
 
     expect(await screen.findByRole("region", { name: "My groups" })).toBeInTheDocument();
     expect(getMyGroups).toHaveBeenCalledTimes(loadsBefore + 1);
+    expect(browseGroups).toHaveBeenCalledTimes(browsesBefore + 1);
+    expect(document.title).toBe("Groups · Caravan");
+  });
+
+  it("links each group to its own address and names the tab after it", async () => {
+    await open(detail());
+
+    expect(document.title).toBe("Goa 2027 · Caravan");
+  });
+});
+
+describe("routes", () => {
+  it.each(["/groups/abc", "/groups/0", "/groups/-1", "/groups/07", "/groups/99999999999999999999"])(
+    "%s is not found, without asking for a group",
+    async (path) => {
+      renderRoutes(path);
+
+      expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+      expect(getGroup).not.toHaveBeenCalled();
+    },
+  );
+
+  it("shows page not found for an unknown address, with a link home", async () => {
+    renderRoutes("/nowhere");
+
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to your groups" })).toHaveAttribute("href", "/");
+    expect(document.title).toBe("Page not found · Caravan");
+    expect(getMyGroups).not.toHaveBeenCalled();
+  });
+
+  it("opens a group straight from its address", async () => {
+    vi.mocked(getGroup).mockResolvedValue(detail({ group_id: 42, name: "Ladakh" }));
+
+    renderRoutes("/groups/42");
+
+    expect(await screen.findByRole("heading", { name: "Ladakh" })).toBeInTheDocument();
+    expect(getGroup).toHaveBeenCalledWith(42);
+    expect(getMyGroups).not.toHaveBeenCalled();
+  });
+
+  it("names the tab when the group no longer exists, and links home", async () => {
+    vi.mocked(getGroup).mockRejectedValue(new NotFoundError(404));
+
+    renderRoutes("/groups/42");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("That group no longer exists.");
+    expect(screen.getByRole("link", { name: "Back to groups" })).toHaveAttribute("href", "/");
+    expect(document.title).toBe("Group not found · Caravan");
   });
 });
 
@@ -443,7 +502,7 @@ describe("while a request is in flight", () => {
   it("sends one request from the list for a double click", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group()]);
     vi.mocked(requestToJoin).mockReturnValue(inFlight());
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.dblClick(
       await screen.findByRole("button", { name: "Request to join Goa 2027" }),
@@ -459,9 +518,9 @@ describe("while a request is in flight", () => {
       detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }),
     );
     vi.mocked(approve).mockReturnValue(inFlight());
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
     await userEvent.click(
-      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
     );
 
     await userEvent.dblClick(await screen.findByRole("button", { name: "Approve Bob" }));
@@ -500,10 +559,10 @@ describe("status badges", () => {
   it("shows the member's status on the group screen", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "member" })]);
     vi.mocked(getGroup).mockResolvedValue(detail({ my_status: "member", members: [] }));
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.click(
-      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
     );
 
     expect(await screen.findByText("You're a member")).toHaveClass("badge--member");
@@ -517,10 +576,10 @@ describe("status badges", () => {
         pending_requests: [{ request_id: 7, display_name: "Bob" }],
       }),
     );
-    render(<Groups onSignedOut={onSignedOut} />);
+    renderRoutes();
 
     await userEvent.click(
-      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
     );
 
     expect(await within(section("Members")).findByText("AL")).toHaveClass("avatar");
@@ -544,9 +603,9 @@ describe("rendering untrusted text", () => {
         pending_requests: [{ request_id: 7, display_name: markup }],
       }),
     );
-    const { container } = render(<Groups onSignedOut={onSignedOut} />);
+    const { container } = renderRoutes();
 
-    await userEvent.click(await screen.findByRole("button", { name: markup }));
+    await userEvent.click(await screen.findByRole("link", { name: markup }));
 
     expect(await screen.findByRole("heading", { name: markup })).toBeInTheDocument();
     expect(screen.getAllByText(markup).length).toBeGreaterThanOrEqual(3);

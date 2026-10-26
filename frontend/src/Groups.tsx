@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 
 import {
   browseGroups,
@@ -12,12 +13,12 @@ import {
   SignedOutError,
 } from "./api";
 import { alert, type Feedback, FeedbackMessage, messageFor, status } from "./Feedback";
-import { GroupView } from "./GroupView";
 import { StatusBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
 import { Icon } from "./ui/Icon";
 import { Skeleton } from "./ui/Skeleton";
+import { useDocumentTitle } from "./useDocumentTitle";
 import {
   DESCRIPTION_MAX_LENGTH,
   GROUP_NAME_HINT,
@@ -33,27 +34,13 @@ export interface GroupsProps {
 const GROUP_NAME_RULE =
   "Up to 60 letters, digits, spaces and - ' & . , starting with a letter or digit.";
 
-function GroupCard({
-  group,
-  onOpen,
-  action,
-}: {
-  group: Group;
-  onOpen: (groupId: number) => void;
-  action?: ReactNode;
-}) {
+function GroupCard({ group, action }: { group: Group; action?: ReactNode }) {
   return (
     <li className="card group-card">
       <div className="group-card__head">
-        <button
-          type="button"
-          className="link-button group-card__name"
-          onClick={() => {
-            onOpen(group.group_id);
-          }}
-        >
+        <Link to={`/groups/${String(group.group_id)}`} className="group-card__name">
           {group.name}
-        </button>
+        </Link>
         <StatusBadge status={group.my_status} />
       </div>
       {group.description && <p className="group-card__description">{group.description}</p>}
@@ -71,13 +58,7 @@ function GroupCard({
   );
 }
 
-function MyGroups({
-  groups,
-  onOpen,
-}: {
-  groups: Group[] | null;
-  onOpen: (groupId: number) => void;
-}) {
+function MyGroups({ groups }: { groups: Group[] | null }) {
   return (
     <section className="home__section" aria-labelledby="my-groups-heading">
       <h2 id="my-groups-heading">My groups</h2>
@@ -86,7 +67,7 @@ function MyGroups({
       {groups !== null && groups.length > 0 && (
         <ul className="card-grid">
           {groups.map((group) => (
-            <GroupCard key={group.group_id} group={group} onOpen={onOpen} />
+            <GroupCard key={group.group_id} group={group} />
           ))}
         </ul>
       )}
@@ -234,7 +215,6 @@ function BrowseGroups({
   groups,
   onSearch,
   onRequest,
-  onOpen,
   requesting,
   invalidSearch,
   feedback,
@@ -242,7 +222,6 @@ function BrowseGroups({
   groups: Group[] | null;
   onSearch: (search: string) => void;
   onRequest: (group: Group) => void;
-  onOpen: (groupId: number) => void;
   /** The group whose join request is in flight. */
   requesting: number | null;
   invalidSearch: boolean;
@@ -285,7 +264,6 @@ function BrowseGroups({
             <GroupCard
               key={group.group_id}
               group={group}
-              onOpen={onOpen}
               action={
                 group.my_status === "none" && (
                   <Button
@@ -314,9 +292,7 @@ export function Groups({ onSignedOut }: GroupsProps) {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [invalidSearch, setInvalidSearch] = useState(false);
   const [requesting, setRequesting] = useState<number | null>(null);
-  const [openGroupId, setOpenGroupId] = useState<number | null>(null);
-  // Bumped when returning from a group, so the home lists show what changed there.
-  const [visit, setVisit] = useState(0);
+  useDocumentTitle("Groups");
 
   const failed = useCallback(
     (error: unknown) => {
@@ -326,10 +302,11 @@ export function Groups({ onSignedOut }: GroupsProps) {
     [onSignedOut],
   );
 
+  // Each visit to the home screen mounts it afresh, so the lists show what changed elsewhere.
   useEffect(() => {
     getMyGroups().then(setMyGroups).catch(failed);
     browseGroups().then(setBrowsed).catch(failed);
-  }, [failed, visit]);
+  }, [failed]);
 
   function browse(search: string) {
     if (search !== "" && !isValidGroupName(search)) {
@@ -351,22 +328,9 @@ export function Groups({ onSignedOut }: GroupsProps) {
     );
   }
 
-  if (openGroupId !== null) {
-    return (
-      <GroupView
-        groupId={openGroupId}
-        onSignedOut={onSignedOut}
-        onBack={() => {
-          setOpenGroupId(null);
-          setVisit((n) => n + 1);
-        }}
-      />
-    );
-  }
-
   return (
     <div className="home">
-      <MyGroups groups={myGroups} onOpen={setOpenGroupId} />
+      <MyGroups groups={myGroups} />
       <div className="home__forms">
         <CreateGroupForm
           onSignedOut={onSignedOut}
@@ -382,7 +346,6 @@ export function Groups({ onSignedOut }: GroupsProps) {
         requesting={requesting}
         invalidSearch={invalidSearch}
         onSearch={browse}
-        onOpen={setOpenGroupId}
         onRequest={(group) => {
           setRequesting(group.group_id);
           requestToJoin(group.group_id)

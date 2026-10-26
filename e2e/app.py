@@ -23,10 +23,10 @@ def form(page: Page, name: str) -> Locator:
     return page.get_by_role("form", name=name)
 
 
-def load(page: Page) -> None:
-    """Opens the app and waits for the session check, which is always the first call."""
+def load(page: Page, path: str = "/") -> None:
+    """Opens the app at a path and waits for the session check, which is always the first call."""
     with page.expect_response(api("GET", "/api/me")):
-        page.goto("/")
+        page.goto(path)
 
 
 def load_signed_out(page: Page) -> None:
@@ -101,8 +101,25 @@ def section(page: Page, name: str) -> Locator:
 def open_group(page: Page, list_name: str, group_name: str) -> None:
     """Opens a group from "My groups" or "Browse groups" and waits for its detail."""
     with page.expect_response(lambda r: urlsplit(r.url).path.startswith("/api/groups/")):
-        section(page, list_name).get_by_role("button", name=group_name, exact=True).click()
+        section(page, list_name).get_by_role("link", name=group_name, exact=True).click()
     expect(page.get_by_role("heading", name=group_name, level=2)).to_be_visible()
+
+
+def group_path(page: Page) -> str:
+    """The open group's address, such as /groups/12."""
+    path = urlsplit(page.url).path
+    assert path.startswith("/groups/"), page.url
+    return path
+
+
+def back_to_home(page: Page) -> None:
+    """Uses the browser's Back button to return home, and waits for both home lists."""
+    with (
+        page.expect_response(api("GET", "/api/me/groups")),
+        page.expect_response(api("GET", "/api/groups")),
+    ):
+        page.go_back()
+    expect(section(page, "My groups")).to_be_visible()
 
 
 def sign_out(page: Page) -> None:
