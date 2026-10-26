@@ -15,6 +15,8 @@ import {
 import { alert, type Feedback, FeedbackMessage, messageFor, status } from "./Feedback";
 import { StatusBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+import { Dialog } from "./ui/Dialog";
+import { EmptyState } from "./ui/EmptyState";
 import { Field } from "./ui/Field";
 import { Icon } from "./ui/Icon";
 import { Skeleton } from "./ui/Skeleton";
@@ -33,6 +35,8 @@ export interface GroupsProps {
 
 const GROUP_NAME_RULE =
   "Up to 60 letters, digits, spaces and - ' & . , starting with a letter or digit.";
+
+type OpenDialog = "create" | "join" | null;
 
 function GroupCard({ group, action }: { group: Group; action?: ReactNode }) {
   return (
@@ -58,12 +62,22 @@ function GroupCard({ group, action }: { group: Group; action?: ReactNode }) {
   );
 }
 
-function MyGroups({ groups }: { groups: Group[] | null }) {
+function MyGroups({ groups, onCreate }: { groups: Group[] | null; onCreate: () => void }) {
   return (
     <section className="home__section" aria-labelledby="my-groups-heading">
-      <h2 id="my-groups-heading">My groups</h2>
+      <h3 id="my-groups-heading">My groups</h3>
       {groups === null && <Skeleton rows={2} />}
-      {groups?.length === 0 && <p className="empty-state">You aren&apos;t in any groups yet.</p>}
+      {groups?.length === 0 && (
+        <EmptyState
+          message="You aren't in any groups yet."
+          action={
+            <Button variant="primary" onClick={onCreate}>
+              <Icon name="plus" />
+              New group
+            </Button>
+          }
+        />
+      )}
       {groups !== null && groups.length > 0 && (
         <ul className="card-grid">
           {groups.map((group) => (
@@ -75,7 +89,11 @@ function MyGroups({ groups }: { groups: Group[] | null }) {
   );
 }
 
-function CreateGroupForm({ onCreated, onSignedOut }: { onCreated: () => void } & GroupsProps) {
+function CreateGroupForm({
+  onCreated,
+  onCancel,
+  onSignedOut,
+}: { onCreated: (group: Group) => void; onCancel: () => void } & GroupsProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -92,25 +110,18 @@ function CreateGroupForm({ onCreated, onSignedOut }: { onCreated: () => void } &
     setInvalid(false);
     setBusy(true);
     createGroup(trimmed, description.trim())
-      .then((group) => {
-        setName("");
-        setDescription("");
-        setFeedback(status(`Created ${group.name}.`));
-        onCreated();
-      })
+      .then(onCreated)
       .catch((error: unknown) => {
+        setBusy(false);
         if (error instanceof SignedOutError) onSignedOut();
         else if (error instanceof InvalidInputError) setFeedback(alert(GROUP_NAME_HINT));
         else setFeedback(alert(messageFor(error)));
-      })
-      .finally(() => {
-        setBusy(false);
       });
   }
 
   return (
     <form
-      className="card form"
+      className="form"
       aria-labelledby="create-group-heading"
       onSubmit={(event) => {
         event.preventDefault();
@@ -139,18 +150,24 @@ function CreateGroupForm({ onCreated, onSignedOut }: { onCreated: () => void } &
           setDescription(event.target.value);
         }}
       />
-      <Button type="submit" variant="primary" busy={busy}>
-        Create group
-      </Button>
       <FeedbackMessage feedback={feedback} />
+      <div className="form__actions">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" busy={busy}>
+          Create group
+        </Button>
+      </div>
     </form>
   );
 }
 
 function RequestByNameForm({
   onRequested,
+  onCancel,
   onSignedOut,
-}: { onRequested: (groupId: number) => void } & GroupsProps) {
+}: { onRequested: (groupId: number) => void; onCancel: () => void } & GroupsProps) {
   const [name, setName] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [invalid, setInvalid] = useState(false);
@@ -167,24 +184,20 @@ function RequestByNameForm({
     setBusy(true);
     requestToJoinByName(trimmed)
       .then((request) => {
-        setName("");
-        setFeedback(status("Request sent. The owner will decide."));
         onRequested(request.group_id);
       })
       .catch((error: unknown) => {
+        setBusy(false);
         if (error instanceof SignedOutError) onSignedOut();
         else if (error instanceof NotFoundError) setFeedback(alert("No group has that name."));
         else if (error instanceof InvalidInputError) setFeedback(alert(GROUP_NAME_HINT));
         else setFeedback(alert(messageFor(error)));
-      })
-      .finally(() => {
-        setBusy(false);
       });
   }
 
   return (
     <form
-      className="card form"
+      className="form"
       aria-labelledby="request-heading"
       onSubmit={(event) => {
         event.preventDefault();
@@ -203,10 +216,15 @@ function RequestByNameForm({
           setName(event.target.value);
         }}
       />
-      <Button type="submit" busy={busy}>
-        Send request
-      </Button>
       <FeedbackMessage feedback={feedback} />
+      <div className="form__actions">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" busy={busy}>
+          Send request
+        </Button>
+      </div>
     </form>
   );
 }
@@ -228,16 +246,23 @@ function BrowseGroups({
   feedback: Feedback;
 }) {
   const [search, setSearch] = useState("");
+  // The term the list was filtered by, so an empty result can offer to clear it.
+  const [searched, setSearched] = useState("");
+
+  function searchFor(term: string) {
+    setSearched(term);
+    onSearch(term);
+  }
 
   return (
     <section className="home__section" aria-labelledby="browse-heading">
-      <h2 id="browse-heading">Browse groups</h2>
+      <h3 id="browse-heading">Browse groups</h3>
       <form
         role="search"
         className="search"
         onSubmit={(event) => {
           event.preventDefault();
-          onSearch(search.trim());
+          searchFor(search.trim());
         }}
       >
         <Field
@@ -257,7 +282,23 @@ function BrowseGroups({
       </form>
       <FeedbackMessage feedback={feedback} />
       {groups === null && <Skeleton />}
-      {groups?.length === 0 && <p className="empty-state">No groups found.</p>}
+      {groups?.length === 0 && (
+        <EmptyState
+          message="No groups found."
+          action={
+            searched !== "" && (
+              <Button
+                onClick={() => {
+                  setSearch("");
+                  searchFor("");
+                }}
+              >
+                Clear search
+              </Button>
+            )
+          }
+        />
+      )}
       {groups !== null && groups.length > 0 && (
         <ul className="card-grid">
           {groups.map((group) => (
@@ -290,6 +331,9 @@ export function Groups({ onSignedOut }: GroupsProps) {
   const [myGroups, setMyGroups] = useState<Group[] | null>(null);
   const [browsed, setBrowsed] = useState<Group[] | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  // The outcome of a dialog, shown on the home screen once the dialog closes.
+  const [notice, setNotice] = useState<Feedback>(null);
+  const [dialog, setDialog] = useState<OpenDialog>(null);
   const [invalidSearch, setInvalidSearch] = useState(false);
   const [requesting, setRequesting] = useState<number | null>(null);
   useDocumentTitle("Groups");
@@ -328,18 +372,45 @@ export function Groups({ onSignedOut }: GroupsProps) {
     );
   }
 
+  function open(which: Exclude<OpenDialog, null>) {
+    setNotice(null);
+    setDialog(which);
+  }
+
+  function close() {
+    setDialog(null);
+  }
+
   return (
     <div className="home">
-      <MyGroups groups={myGroups} />
-      <div className="home__forms">
-        <CreateGroupForm
-          onSignedOut={onSignedOut}
-          onCreated={() => {
-            getMyGroups().then(setMyGroups).catch(failed);
-          }}
-        />
-        <RequestByNameForm onRequested={markPending} onSignedOut={onSignedOut} />
+      <div className="home__header">
+        <h2>Groups</h2>
+        <div className="home__actions">
+          <Button
+            onClick={() => {
+              open("join");
+            }}
+          >
+            Join by name
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              open("create");
+            }}
+          >
+            <Icon name="plus" />
+            New group
+          </Button>
+        </div>
       </div>
+      <FeedbackMessage feedback={notice} />
+      <MyGroups
+        groups={myGroups}
+        onCreate={() => {
+          open("create");
+        }}
+      />
       <BrowseGroups
         groups={browsed}
         feedback={feedback}
@@ -358,6 +429,28 @@ export function Groups({ onSignedOut }: GroupsProps) {
             });
         }}
       />
+      <Dialog open={dialog === "create"} onClose={close} labelledBy="create-group-heading">
+        <CreateGroupForm
+          onSignedOut={onSignedOut}
+          onCancel={close}
+          onCreated={(group) => {
+            close();
+            setNotice(status(`Created ${group.name}.`));
+            getMyGroups().then(setMyGroups).catch(failed);
+          }}
+        />
+      </Dialog>
+      <Dialog open={dialog === "join"} onClose={close} labelledBy="request-heading">
+        <RequestByNameForm
+          onSignedOut={onSignedOut}
+          onCancel={close}
+          onRequested={(groupId) => {
+            close();
+            setNotice(status("Request sent. The owner will decide."));
+            markPending(groupId);
+          }}
+        />
+      </Dialog>
     </div>
   );
 }

@@ -81,6 +81,13 @@ function form(name: string) {
   return screen.getByRole("form", { name });
 }
 
+/** Opens a dialog from the home header, whose button comes before any empty-state one. */
+async function openDialog(button: "New group" | "Join by name") {
+  const [header] = screen.getAllByRole("button", { name: button });
+  if (header === undefined) throw new Error(`No ${button} button`);
+  await userEvent.click(header);
+}
+
 describe("home", () => {
   it("lists my groups and all groups with their status", async () => {
     vi.mocked(getMyGroups).mockResolvedValue([group({ my_status: "owner" })]);
@@ -123,6 +130,7 @@ describe("home", () => {
 
 describe("creating a group", () => {
   async function create(name: string, description = "") {
+    await openDialog("New group");
     await userEvent.type(within(form("Create group")).getByLabelText("Name"), name);
     if (description)
       await userEvent.type(within(form("Create group")).getByLabelText("Description"), description);
@@ -139,10 +147,53 @@ describe("creating a group", () => {
     await create(" Goa 2027 ", "Beach week");
 
     expect(createGroup).toHaveBeenCalledWith("Goa 2027", "Beach week");
-    expect(await within(form("Create group")).findByRole("status")).toHaveTextContent(
-      "Created Goa 2027.",
-    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Created Goa 2027.");
+    expect(screen.queryByRole("form", { name: "Create group" })).toBeNull();
     expect(await within(section("My groups")).findByText("Goa 2027")).toBeInTheDocument();
+    expect(getMyGroups).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens in a dialog with the name field focused", async () => {
+    await renderGroups();
+
+    await openDialog("New group");
+
+    expect(screen.getByRole("dialog", { name: "Create group" })).toBeInTheDocument();
+    expect(within(form("Create group")).getByLabelText("Name")).toHaveFocus();
+  });
+
+  it("sends nothing when cancelled", async () => {
+    await renderGroups();
+    await openDialog("New group");
+    await userEvent.type(within(form("Create group")).getByLabelText("Name"), "Goa");
+
+    await userEvent.click(within(form("Create group")).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("form", { name: "Create group" })).toBeNull();
+    expect(createGroup).not.toHaveBeenCalled();
+  });
+
+  it("stays open with the typed name when the name is taken", async () => {
+    vi.mocked(createGroup).mockRejectedValue(new ConflictError("group-name-taken"));
+    await renderGroups();
+
+    await create("Goa 2027");
+
+    expect(await within(form("Create group")).findByRole("alert")).toHaveTextContent(
+      "That group name is already taken.",
+    );
+    expect(within(form("Create group")).getByLabelText("Name")).toHaveValue("Goa 2027");
+    expect(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    ).toBeEnabled();
+  });
+
+  it("opens from the empty My groups state", async () => {
+    await renderGroups();
+
+    await userEvent.click(within(section("My groups")).getByRole("button", { name: "New group" }));
+
+    expect(screen.getByRole("form", { name: "Create group" })).toBeInTheDocument();
   });
 
   it("checks the name before sending", async () => {
@@ -180,6 +231,7 @@ describe("creating a group", () => {
 
 describe("asking to join", () => {
   async function requestByName(name: string) {
+    await openDialog("Join by name");
     await userEvent.type(within(form("Request to join")).getByLabelText("Group name"), name);
     await userEvent.click(
       within(form("Request to join")).getByRole("button", { name: "Send request" }),
@@ -221,10 +273,23 @@ describe("asking to join", () => {
     await requestByName(" goa 2027 ");
 
     expect(requestToJoinByName).toHaveBeenCalledWith("goa 2027");
-    expect(await within(form("Request to join")).findByRole("status")).toHaveTextContent(
-      "Request sent.",
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Request sent. The owner will decide.",
     );
+    expect(screen.queryByRole("form", { name: "Request to join" })).toBeNull();
     expect(within(section("Browse groups")).getByText("Request pending")).toBeInTheDocument();
+  });
+
+  it("stays open with the typed name when no group has it", async () => {
+    vi.mocked(requestToJoinByName).mockRejectedValue(new NotFoundError(404));
+    await renderGroups();
+
+    await requestByName("Nowhere");
+
+    expect(await within(form("Request to join")).findByRole("alert")).toHaveTextContent(
+      "No group has that name.",
+    );
+    expect(within(form("Request to join")).getByLabelText("Group name")).toHaveValue("Nowhere");
   });
 
   it.each([
@@ -290,6 +355,28 @@ describe("searching", () => {
       "Group names are",
     );
     expect(browseGroups).not.toHaveBeenCalled();
+  });
+
+  it("offers to clear a search that found nothing, and reloads the full list", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group()]);
+    renderRoutes();
+    await screen.findByRole("link", { name: "Goa 2027" });
+    vi.mocked(browseGroups).mockResolvedValueOnce([]);
+    await userEvent.type(screen.getByLabelText("Search by name"), "Ladakh");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await screen.findByText("No groups found.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(browseGroups).toHaveBeenLastCalledWith(undefined);
+    expect(screen.getByLabelText("Search by name")).toHaveValue("");
+    expect(await screen.findByRole("link", { name: "Goa 2027" })).toBeInTheDocument();
+  });
+
+  it("offers no clear button when nothing was searched", async () => {
+    await renderGroups();
+
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
   });
 });
 
@@ -475,6 +562,7 @@ describe("while a request is in flight", () => {
   it("sends one create for a double click", async () => {
     vi.mocked(createGroup).mockReturnValue(inFlight());
     await renderGroups();
+    await openDialog("New group");
     await userEvent.type(within(form("Create group")).getByLabelText("Name"), "Goa");
 
     await userEvent.dblClick(
@@ -490,6 +578,7 @@ describe("while a request is in flight", () => {
   it("sends one request by name for a double click", async () => {
     vi.mocked(requestToJoinByName).mockReturnValue(inFlight());
     await renderGroups();
+    await openDialog("Join by name");
     await userEvent.type(within(form("Request to join")).getByLabelText("Group name"), "Goa");
 
     await userEvent.dblClick(
@@ -533,6 +622,7 @@ describe("while a request is in flight", () => {
 describe("marking invalid fields", () => {
   it("marks the group name invalid when its check fails", async () => {
     await renderGroups();
+    await openDialog("New group");
     const name = within(form("Create group")).getByLabelText("Name");
 
     await userEvent.type(name, "Goa_2027");

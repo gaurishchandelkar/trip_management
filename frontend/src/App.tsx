@@ -58,7 +58,21 @@ function SessionMenu({ member, onSignedOut }: { member: Member; onSignedOut: () 
 
 function SignInScreen({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
   useDocumentTitle("Sign in");
-  return <SignedOut onSignedIn={onSignedIn} />;
+  return (
+    <div className="welcome-layout">
+      <section className="welcome" aria-labelledby="welcome-heading">
+        <p className="welcome__name">{PRODUCT_NAME}</p>
+        <h2 id="welcome-heading" className="welcome__tagline">
+          Plan trips together.
+        </h2>
+        <p className="welcome__body">
+          Start a group for your next trip, find your friends&apos; groups, and ask to join. Each
+          group&apos;s owner decides who&apos;s in.
+        </p>
+      </section>
+      <SignedOut onSignedIn={onSignedIn} />
+    </div>
+  );
 }
 
 export function App() {

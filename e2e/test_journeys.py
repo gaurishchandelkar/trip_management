@@ -17,6 +17,7 @@ from e2e.app import (
     load,
     load_home,
     load_signed_out,
+    open_dialog,
     open_group,
     register,
     register_and_sign_in,
@@ -161,11 +162,11 @@ def test_owner_rejects_a_request_made_by_name(page: Page, other_page: Page) -> N
     create_group(ada, name)
 
     register_and_sign_in(carol, unique_user_id("carol"), "Carol")
-    by_name = form(carol, "Request to join")
+    by_name = open_dialog(carol, "Join by name", "Request to join")
     by_name.get_by_label("Group name").fill(name.lower())
     with carol.expect_response(api("POST", "/api/join-requests")):
         by_name.get_by_role("button", name="Send request").click()
-    expect(by_name.get_by_role("status")).to_have_text("Request sent. The owner will decide.")
+    expect(carol.get_by_role("status")).to_have_text("Request sent. The owner will decide.")
 
     open_group(ada, "My groups", name)
     with ada.expect_response(lambda r: r.url.endswith("/reject")):
@@ -182,7 +183,7 @@ def test_owner_rejects_a_request_made_by_name(page: Page, other_page: Page) -> N
 
 def test_unknown_group_name_says_so(page: Page) -> None:
     register_and_sign_in(page, unique_user_id("bob"), "Bob")
-    by_name = form(page, "Request to join")
+    by_name = open_dialog(page, "Join by name", "Request to join")
     by_name.get_by_label("Group name").fill(unique_group_name("Nowhere"))
 
     with page.expect_response(api("POST", "/api/join-requests")):
@@ -195,7 +196,7 @@ def test_taken_group_name_says_so(page: Page) -> None:
     name = unique_group_name("Goa")
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
     create_group(page, name)
-    create_form = form(page, "Create group")
+    create_form = open_dialog(page, "New group", "Create group")
     create_form.get_by_label("Name").fill(name.upper())
 
     with page.expect_response(api("POST", "/api/groups")):
@@ -322,3 +323,51 @@ def test_missing_group_says_so(page: Page) -> None:
 
     expect(page.get_by_role("alert")).to_have_text("That group no longer exists.")
     expect(page.get_by_role("link", name="Back to groups")).to_have_attribute("href", "/")
+
+
+def test_escape_closes_the_new_group_dialog_and_returns_focus(page: Page) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    opener = page.get_by_role("button", name="New group", exact=True).first
+
+    create_form = open_dialog(page, "New group", "Create group")
+    expect(create_form.get_by_label("Name")).to_be_focused()
+    create_form.get_by_label("Name").fill("Never sent")
+    page.keyboard.press("Escape")
+
+    expect(page.get_by_role("dialog")).to_have_count(0)
+    expect(form(page, "Create group")).to_have_count(0)
+    expect(opener).to_be_focused()
+
+
+def test_clear_search_shows_every_group_again(page: Page) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    create_group(page, unique_group_name("Goa"))
+    search_groups(page, unique_group_name("Nowhere"))
+    browse = section(page, "Browse groups")
+    expect(browse.get_by_text("No groups found.")).to_be_visible()
+
+    with page.expect_response(api("GET", "/api/groups")):
+        browse.get_by_role("button", name="Clear search").click()
+
+    expect(browse.get_by_label("Search by name")).to_have_value("")
+    expect(browse.get_by_text("No groups found.")).to_have_count(0)
+    expect(browse.get_by_role("listitem").first).to_be_visible()
+
+
+def test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow(page: Page) -> None:
+    page.set_viewport_size({"width": 1280, "height": 900})
+    load_signed_out(page)
+    welcome = page.get_by_role("region", name="Plan trips together.")
+    expect(welcome).to_contain_text("Caravan")
+
+    panel, sign_in_box = welcome.bounding_box(), form(page, "Sign in").bounding_box()
+    assert panel is not None and sign_in_box is not None
+    assert panel["x"] + panel["width"] <= sign_in_box["x"], (panel, sign_in_box)
+    assert panel["y"] < sign_in_box["y"] + sign_in_box["height"], (panel, sign_in_box)
+
+    page.set_viewport_size({"width": 360, "height": 740})
+    panel, sign_in_box = welcome.bounding_box(), form(page, "Sign in").bounding_box()
+    assert panel is not None and sign_in_box is not None
+    assert panel["y"] + panel["height"] <= sign_in_box["y"], (panel, sign_in_box)
+    expect(form(page, "Sign in")).to_be_visible()
+    expect(form(page, "Register")).to_be_visible()

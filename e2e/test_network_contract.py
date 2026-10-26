@@ -18,6 +18,7 @@ from e2e.app import (
     load,
     load_home,
     load_signed_out,
+    open_dialog,
     open_group,
     register,
     register_and_sign_in,
@@ -232,12 +233,12 @@ def test_request_by_name_posts_the_name_once(
     name = _owned_group(other_page)
     register_and_sign_in(page, unique_user_id("carol"), "Carol")
     before = len(traffic.api_calls())
-    by_name = form(page, "Request to join")
+    by_name = open_dialog(page, "Join by name", "Request to join")
     by_name.get_by_label("Group name").fill(f" {name.lower()} ")
 
     with page.expect_response(api("POST", "/api/join-requests")):
         by_name.get_by_role("button", name="Send request").click()
-    expect(by_name.get_by_role("status")).to_be_visible()
+    expect(page.get_by_role("status")).to_be_visible()
 
     calls = traffic.api_calls()[before:]
     assert [call.signature for call in calls] == [("POST", "/api/join-requests", {})], (
@@ -327,7 +328,7 @@ def test_unknown_group_name_gets_one_404_and_no_reload(page: Page, traffic: ApiT
     name = unique_group_name("Nowhere")
     register_and_sign_in(page, unique_user_id("bob"), "Bob")
     before = len(traffic.api_calls())
-    by_name = form(page, "Request to join")
+    by_name = open_dialog(page, "Join by name", "Request to join")
     by_name.get_by_label("Group name").fill(name)
 
     with page.expect_response(api("POST", "/api/join-requests")):
@@ -348,7 +349,7 @@ def test_taken_group_name_gets_one_409_and_no_reload(page: Page, traffic: ApiTra
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
     create_group(page, name)
     before = len(traffic.api_calls())
-    create_form = form(page, "Create group")
+    create_form = open_dialog(page, "New group", "Create group")
     create_form.get_by_label("Name").fill(name.upper())
 
     with page.expect_response(api("POST", "/api/groups")):
@@ -487,3 +488,48 @@ def test_missing_group_asks_once_and_gets_a_generic_404(page: Page, traffic: Api
         traffic.describe()
     )
     assert (calls[1].status, calls[1].json()) == (404, {"detail": "Not found"})
+
+
+@covers("test_escape_closes_the_new_group_dialog_and_returns_focus")
+def test_closing_a_dialog_sends_nothing(page: Page, traffic: ApiTraffic) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    before = len(traffic.api_calls())
+
+    create_form = open_dialog(page, "New group", "Create group")
+    create_form.get_by_label("Name").fill("Never sent")
+    page.keyboard.press("Escape")
+    expect(form(page, "Create group")).to_have_count(0)
+    by_name = open_dialog(page, "Join by name", "Request to join")
+    by_name.get_by_label("Group name").fill("Never sent")
+    by_name.get_by_role("button", name="Cancel").click()
+    expect(form(page, "Request to join")).to_have_count(0)
+
+    assert traffic.api_calls()[before:] == [], traffic.describe()
+
+
+@covers("test_clear_search_shows_every_group_again")
+def test_clear_search_sends_one_unfiltered_browse(page: Page, traffic: ApiTraffic) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    search_groups(page, unique_group_name("Nowhere"))
+    expect(section(page, "Browse groups").get_by_text("No groups found.")).to_be_visible()
+    before = len(traffic.api_calls())
+
+    with page.expect_response(api("GET", "/api/groups")):
+        section(page, "Browse groups").get_by_role("button", name="Clear search").click()
+    expect(section(page, "Browse groups").get_by_text("No groups found.")).to_have_count(0)
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [BROWSE], traffic.describe()
+    assert calls[0].status == 200
+
+
+@covers("test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow")
+def test_resizing_the_signed_out_screen_makes_no_calls(page: Page, traffic: ApiTraffic) -> None:
+    page.set_viewport_size({"width": 1280, "height": 900})
+    load_signed_out(page)
+
+    page.set_viewport_size({"width": 360, "height": 740})
+    expect(page.get_by_role("region", name="Plan trips together.")).to_be_visible()
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls] == [ME], traffic.describe()

@@ -144,24 +144,25 @@ Success criteria:
 - Signed-out screen: a welcome panel ("Caravan", "Plan trips together.") beside the two forms at 960 px and wider, and above them on narrower screens. Both forms stay visible.
 - E2E helpers: `create_group` clicks **New group** first and reads the page-level status. The request-by-name steps click **Join by name** first.
 
+Notes from implementation:
+- jsdom has `HTMLDialogElement` but no `showModal()` or `close()`, so `test-setup.ts` stubs those two, guarded for the node-environment token test.
+- `Dialog` moves focus to the first field itself after `showModal()`, so jsdom and browsers behave the same. Its content mounts only while open, so each opening starts with an empty form.
+- With the "Groups" screen title as the `h2`, the My groups and Browse groups section headings are now `h3`. No test depended on their level.
+- **Clear search** appears only when the empty result came from a search term. With no term, there's nothing to clear.
+- The E2E clear-search journey checks that the list is no longer empty rather than for a specific group, because browse returns at most 50 groups by name and the shared E2E database grows during a run.
+
 Success criteria:
-- [ ] Vitest:
-  - **New group** opens a dialog with the Create group form, and its first field is focused
-  - Cancel closes it and sends nothing
-  - success closes it and shows "Created {name}."
-  - a `409` keeps it open with "That group name is already taken." and the typed name
-- [ ] Vitest:
-  - **Join by name** success closes the dialog, shows "Request sent. The owner will decide." and marks the listed group Pending
-  - "No group has that name." keeps it open
-- [ ] Vitest: the empty My groups state's **New group** opens the dialog. **Clear search** empties the box and calls `browseGroups()` with no term
-- [ ] E2E outside: Escape closes the New group dialog, and focus is back on the **New group** button
-- [ ] E2E inside: nothing is sent when the dialog is closed
-- [ ] E2E (existing, updated helpers): the create, request-by-name, unknown-name and duplicate-name journeys pass with unchanged messages
-- [ ] E2E inside (existing): their calls are still `[CREATE, MY_GROUPS]` and `[POST /api/join-requests]`
-- [ ] E2E outside: after a search with no results, **Clear search** shows the full list again
-- [ ] E2E inside: the call is exactly `[BROWSE]` with no `q`
-- [ ] E2E outside: at 1280 px the welcome panel and the forms sit side by side. At 360 px the panel is above the forms, and both forms are visible
-- [ ] `npm run check` passes
+- [x] Vitest (`creating a group`): **New group** opens a dialog with the name field focused; Cancel sends nothing; success closes it and shows "Created Goa 2027."; a `409` keeps it open with the typed name
+- [x] Vitest (`asking to join`): **Join by name** success closes the dialog, shows "Request sent. The owner will decide." and marks the listed group pending; "No group has that name." keeps it open with the typed name
+- [x] Vitest: the empty My groups state's **New group** opens the dialog. **Clear search** empties the box and calls `browseGroups(undefined)`, and isn't offered when nothing was searched
+- [x] E2E outside: `test_escape_closes_the_new_group_dialog_and_returns_focus`
+- [x] E2E inside: `test_closing_a_dialog_sends_nothing` (Escape and Cancel, both dialogs: no calls)
+- [x] E2E (existing, updated helpers): the create, request-by-name, unknown-name and duplicate-name journeys pass with unchanged messages
+- [x] E2E inside (existing): their calls are still `[CREATE, MY_GROUPS]` and `[POST /api/join-requests]`, assertions unchanged
+- [x] E2E outside: `test_clear_search_shows_every_group_again`
+- [x] E2E inside: `test_clear_search_sends_one_unfiltered_browse` asserts exactly `[BROWSE]` with no `q`
+- [x] E2E outside: `test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow`, paired with `test_resizing_the_signed_out_screen_makes_no_calls`
+- [x] `npm run check` passes (build, lint, unit, integration; functional: 53 passed)
 
 ## Phase 4: Responsive polish, budgets and docs
 

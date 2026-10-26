@@ -78,13 +78,21 @@ def unique_group_name(prefix: str) -> str:
     return f"{prefix} {uuid.uuid4().hex[:10]}"
 
 
+def open_dialog(page: Page, button: str, form_name: str) -> Locator:
+    """Opens a home-screen dialog and returns its form. The header button comes first."""
+    page.get_by_role("button", name=button, exact=True).first.click()
+    dialog_form = form(page, form_name)
+    expect(dialog_form).to_be_visible()
+    return dialog_form
+
+
 def create_group(page: Page, name: str, description: str = "") -> None:
-    create_form = form(page, "Create group")
+    create_form = open_dialog(page, "New group", "Create group")
     create_form.get_by_label("Name").fill(name)
     create_form.get_by_label("Description").fill(description)
     with page.expect_response(api("GET", "/api/me/groups")):
         create_form.get_by_role("button", name="Create group").click()
-    expect(create_form.get_by_role("status")).to_have_text(f"Created {name}.")
+    expect(page.get_by_role("status")).to_have_text(f"Created {name}.")
 
 
 def search_groups(page: Page, term: str) -> None:
