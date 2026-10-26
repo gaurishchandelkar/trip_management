@@ -105,12 +105,15 @@ Success criteria:
   - exits 1 if any file is missing or unexpected
 - `scripts/screenshot-summary.test.mjs`: the full set passes; a missing file fails and names it; an extra file fails; and the script's screen list matches `SCREENS` in `e2e/test_screenshots.py`, so the two lists can't drift.
 
+Notes from implementation:
+- pytest-playwright clears `test-results/` at the start of **every** pytest session, including the backend unit and integration runs, so a later unit run empties the screenshots folder. That doesn't matter for CI, where the functional job runs only the functional stage, or for `npm run check`, where functional runs after the other pytest stages. It showed up here as a real "0 of 20, exit 1" run of the summary.
+
 Success criteria:
-- [ ] `node --test scripts/screenshot-summary.test.mjs` passes
-- [ ] Negative proof: run the script against a copy of the folder with one image deleted. It exits 1, and its summary marks that image missing
-- [ ] Negative proof: temporarily add a sixth screen to `SCREENS` in `e2e/test_screenshots.py`. The list-match test fails. Revert
-- [ ] `node scripts/screenshot-summary.mjs test-results/screenshots` on the Phase 1 output exits 0 and prints all 20 as present
-- [ ] `npm run check -- lint unit` passes
+- [x] `node --test scripts/screenshot-summary.test.mjs`: 5 passed
+- [x] Negative proof: on a copy of the folder without `group-dark-360.png`, the script exits 1. It reports "19 of 20", marks that cell **missing**, and names the file on stderr
+- [x] Negative proof: adding `"join-dialog"` to `SCREENS` in `e2e/test_screenshots.py` fails only `lists the same screens as the capture tests`. Reverted
+- [x] `node scripts/screenshot-summary.mjs test-results/screenshots` on fresh captures exits 0 and prints "20 of 20" with every cell present
+- [x] `npm run check -- lint unit` passes
 
 ## Phase 3: CI wiring and docs
 
