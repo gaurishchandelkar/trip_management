@@ -199,41 +199,43 @@ Success criteria:
 
 ### Spec coverage
 
-| Spec acceptance criterion | Phase and check |
+Each row names its tests as `path::test name`. `scripts/harness-config.test.mjs` fails if a name matches no test, or if a row names none.
+
+| Spec acceptance criterion | Tests |
 |---|---|
-| Banner, Caravan, logo, link to `/`; tagline | 2 banner E2E; 3 welcome panel E2E |
-| Avatar, "Signed in as", Sign out | 2 existing journey plus banner E2E |
-| Skip to content | 2 skip-link E2E |
-| `document.title` per screen | 2 vitest plus E2E |
-| Favicon, `theme-color` | 2 E2E |
-| Open group changes the URL; Back reloads lists | 2 outside plus inside E2E |
-| Direct load and refresh | 2 outside plus inside E2E |
-| Signed-out deep link, then sign in to the same route | 2 outside plus inside E2E |
-| `401` keeps the route | 2 vitest |
-| Unknown path, bad ID: Page not found, no call | 2 vitest plus outside and inside E2E |
-| Missing group | 2 E2E |
-| SPA fallback, `/api` untouched | 2 direct-load E2E |
-| Welcome panel layout | 3 E2E at 1280 and 360 |
-| Hints, `aria-describedby`, `aria-invalid` | `App.test.tsx::shows each field's rule before the member fails it`, `Groups.test.tsx::shows the search rule before the member fails it`, `opens Join by name with the group name field focused`, `marking invalid fields` (both files) |
-| My groups cards, Browse badges and buttons | 1 existing journeys plus vitest |
-| Empty My groups with **New group** | 3 vitest |
-| No results, Clear search | 3 vitest plus outside and inside E2E |
-| Header buttons, home shows only the lists | `Groups.test.tsx::offers New group as the main action and Join by name beside it, with no form open` |
-| Dialog opens and focuses the first field | 3 vitest |
-| Escape or Cancel closes it, no request, focus returns | `test_journeys.py::test_closing_a_dialog_returns_focus_to_its_opener` (Escape on New group, Cancel on Join by name), `test_network_contract.py::test_closing_a_dialog_sends_nothing`, `Groups.test.tsx::sends nothing when cancelled` |
-| Dialog success: closes, status, same calls | `Groups.test.tsx::creates the group and reloads my groups`, `asks by name and marks the listed group pending`; `test_journeys.py::test_creating_a_group_returns_focus_to_new_group`; `test_network_contract.py::test_create_group_posts_once_then_reloads_my_groups`, `test_request_by_name_posts_the_name_once` |
-| Dialog failure stays open with text kept | 3 vitest plus existing duplicate-name and unknown-name E2E |
-| Group header, badge, Back link | 1 badge vitest; 2 Back link E2E |
-| Members with avatars | 1 vitest |
-| Pending requests with avatars and button styles | 1 vitest plus existing approve and reject E2E |
-| Busy buttons, one request on double click | `Groups.test.tsx::while a request is in flight` (create, request by name, request from list, decision, Search, Clear search, and a later request staying busy) |
-| Skeletons with "Loading…" | 1 vitest; 4 E2E |
-| Callouts keep roles and text | 1 vitest plus all existing E2E |
-| Focus ring at least 3:1 | 1 contrast test plus MCP check |
-| Dark theme follows the system | 1 E2E |
-| 360 px, no horizontal scroll with long text | 4 E2E |
-| Reduced motion | 4 E2E |
-| Contrast at least 4.5:1 and 3:1 | 1 contrast test |
+| Banner, Caravan, logo, link to `/`; tagline | `e2e/test_journeys.py::test_shell_shows_the_brand_title_and_icon`, `e2e/test_journeys.py::test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow`, `frontend/src/App.test.tsx::shows the brand as the page heading, linking home` |
+| Avatar, "Signed in as", Sign out | `frontend/src/App.test.tsx::shows the signed-in member beside their avatar`, `e2e/test_journeys.py::test_register_sign_in_and_see_display_name`, `e2e/test_journeys.py::test_sign_out_returns_to_sign_in` |
+| Skip to content | `e2e/test_journeys.py::test_skip_link_moves_focus_to_the_main_content`, `e2e/test_network_contract.py::test_skip_link_makes_no_calls`, `frontend/src/App.test.tsx::moves focus to the main content from the skip link` |
+| `document.title` per screen | `e2e/test_journeys.py::test_shell_shows_the_brand_title_and_icon`, `e2e/test_journeys.py::test_opening_a_group_gives_it_an_address_and_back_returns_home`, `e2e/test_journeys.py::test_unknown_address_shows_page_not_found`, `frontend/src/Groups.test.tsx::links each group to its own address and names the tab after it`, `frontend/src/Groups.test.tsx::names the tab when the group no longer exists, and links home` |
+| Favicon, `theme-color` | `e2e/test_journeys.py::test_shell_shows_the_brand_title_and_icon`, `frontend/src/theme/tokens.test.ts::%s uses the light --color-brand` |
+| Open group changes the URL; Back reloads lists | `e2e/test_journeys.py::test_opening_a_group_gives_it_an_address_and_back_returns_home`, `e2e/test_network_contract.py::test_back_reloads_each_home_list_once`, `frontend/src/Groups.test.tsx::goes back to the home view and reloads its lists` |
+| Direct load and refresh | `e2e/test_journeys.py::test_a_group_address_opens_directly_and_survives_a_refresh`, `e2e/test_network_contract.py::test_group_address_checks_the_session_then_loads_only_that_group`, `frontend/src/Groups.test.tsx::opens a group straight from its address` |
+| Signed-out deep link, then sign in to the same route | `e2e/test_journeys.py::test_signed_out_visitor_lands_on_the_group_after_signing_in`, `e2e/test_network_contract.py::test_signing_in_on_a_group_address_loads_only_that_group` |
+| `401` keeps the route | `frontend/src/App.test.tsx::keeps the address when the session ends, and returns there after signing in` |
+| Unknown path, bad ID: Page not found, no call | `frontend/src/Groups.test.tsx::%s is not found, without asking for a group`, `frontend/src/Groups.test.tsx::shows page not found for an unknown address, with a link home`, `e2e/test_journeys.py::test_unknown_address_shows_page_not_found`, `e2e/test_network_contract.py::test_unknown_address_makes_no_call_after_the_session_check` |
+| Missing group | `e2e/test_journeys.py::test_missing_group_says_so`, `e2e/test_network_contract.py::test_missing_group_asks_once_and_gets_a_generic_404` |
+| SPA fallback, `/api` untouched | `e2e/test_journeys.py::test_a_group_address_opens_directly_and_survives_a_refresh`, `e2e/test_network_contract.py::test_group_address_checks_the_session_then_loads_only_that_group` |
+| Welcome panel layout | `e2e/test_journeys.py::test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow`, `e2e/test_network_contract.py::test_resizing_the_signed_out_screen_makes_no_calls` |
+| Hints, `aria-describedby`, `aria-invalid` | `frontend/src/App.test.tsx::shows each field's rule before the member fails it`, `frontend/src/App.test.tsx::register marks %s / %s as invalid on the %s field`, `frontend/src/App.test.tsx::sign-in marks %s / %j as invalid on the %s field`, `frontend/src/Groups.test.tsx::shows the search rule before the member fails it`, `frontend/src/Groups.test.tsx::opens Join by name with the group name field focused`, `frontend/src/Groups.test.tsx::marks the group name invalid when its check fails`, `frontend/src/ui/ui.test.tsx::labels the input and ties the hint to it` |
+| My groups cards, Browse badges and buttons | `frontend/src/Groups.test.tsx::lists my groups and all groups with their status`, `frontend/src/ui/ui.test.tsx::shows %s as text`, `e2e/test_journeys.py::test_owner_approves_a_member_who_found_the_group_by_browsing` |
+| Empty My groups with **New group** | `frontend/src/Groups.test.tsx::opens from the empty My groups state`, `e2e/test_journeys.py::test_creating_a_group_returns_focus_to_new_group` |
+| No results, Clear search | `frontend/src/Groups.test.tsx::offers to clear a search that found nothing, and reloads the full list`, `frontend/src/Groups.test.tsx::offers no clear button when nothing was searched`, `e2e/test_journeys.py::test_clear_search_shows_every_group_again`, `e2e/test_network_contract.py::test_clear_search_sends_one_unfiltered_browse` |
+| Header buttons, home shows only the lists | `frontend/src/Groups.test.tsx::offers New group as the main action and Join by name beside it, with no form open` |
+| Dialog opens and focuses the first field | `frontend/src/Groups.test.tsx::opens in a dialog with the name field focused`, `frontend/src/Groups.test.tsx::opens Join by name with the group name field focused`, `e2e/test_journeys.py::test_closing_a_dialog_returns_focus_to_its_opener` |
+| Escape or Cancel closes it, no request, focus returns | `e2e/test_journeys.py::test_closing_a_dialog_returns_focus_to_its_opener`, `e2e/test_network_contract.py::test_closing_a_dialog_sends_nothing`, `frontend/src/Groups.test.tsx::sends nothing when cancelled` |
+| Dialog success: closes, status, same calls | `frontend/src/Groups.test.tsx::creates the group and reloads my groups`, `frontend/src/Groups.test.tsx::asks by name and marks the listed group pending`, `e2e/test_journeys.py::test_creating_a_group_returns_focus_to_new_group`, `e2e/test_network_contract.py::test_create_group_posts_once_then_reloads_my_groups`, `e2e/test_network_contract.py::test_request_by_name_posts_the_name_once` |
+| Dialog failure stays open with text kept | `frontend/src/Groups.test.tsx::stays open with the typed name when the name is taken`, `frontend/src/Groups.test.tsx::stays open with the typed name when no group has it`, `e2e/test_journeys.py::test_taken_group_name_says_so`, `e2e/test_journeys.py::test_unknown_group_name_says_so` |
+| Group header, badge, Back link | `frontend/src/Groups.test.tsx::shows the member's status on the group screen`, `frontend/src/Groups.test.tsx::names the tab when the group no longer exists, and links home`, `e2e/test_journeys.py::test_opening_a_group_gives_it_an_address_and_back_returns_home` |
+| Members with avatars | `frontend/src/Groups.test.tsx::shows an avatar beside each member and requester` |
+| Pending requests with avatars and button styles | `frontend/src/Groups.test.tsx::shows an avatar beside each member and requester`, `e2e/test_journeys.py::test_owner_approves_a_member_who_found_the_group_by_browsing`, `e2e/test_journeys.py::test_owner_rejects_a_request_made_by_name` |
+| Busy buttons, one request on double click | `frontend/src/Groups.test.tsx::sends one create for a double click`, `frontend/src/Groups.test.tsx::sends one request by name for a double click`, `frontend/src/Groups.test.tsx::sends one request from the list for a double click`, `frontend/src/Groups.test.tsx::sends one decision for a double click, and holds both buttons`, `frontend/src/Groups.test.tsx::sends one search for a double click`, `frontend/src/Groups.test.tsx::sends one unfiltered browse for a double click on Clear search`, `frontend/src/Groups.test.tsx::keeps a later request busy when an earlier one answers first`, `frontend/src/ui/ui.test.tsx::is disabled and marked busy while its request is in flight` |
+| Skeletons with "Loading…" | `frontend/src/ui/ui.test.tsx::tells assistive technology it is loading`, `frontend/src/App.test.tsx::shows loading, then the sign-in and register forms with labels`, `e2e/test_journeys.py::test_reduced_motion_stops_animation` |
+| Callouts keep roles and text | `frontend/src/ui/ui.test.tsx::keeps the %j role and text` |
+| Focus ring at least 3:1 | `frontend/src/theme/tokens.test.ts::%s on %s is at least %d:1` (and the Phase 1 browser check) |
+| Dark theme follows the system | `e2e/test_journeys.py::test_theme_follows_the_system_colour_scheme`, `e2e/test_network_contract.py::test_dark_theme_needs_no_api_calls` |
+| 360 px, no horizontal scroll with long text | `e2e/test_journeys.py::test_no_screen_scrolls_sideways_on_a_phone`, `e2e/test_network_contract.py::test_a_phone_screen_makes_the_same_calls` |
+| Reduced motion | `e2e/test_journeys.py::test_reduced_motion_stops_animation`, `e2e/test_network_contract.py::test_motion_and_font_preferences_make_no_calls` |
+| Contrast at least 4.5:1 and 3:1 | `frontend/src/theme/tokens.test.ts::%s on %s is at least %d:1` |
 
 ## Review fixes (`/ship`)
 

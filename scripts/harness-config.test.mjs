@@ -140,3 +140,76 @@ test("hiddenCharacters reports the file, line and code point", () => {
 
   assert.deepEqual(hiddenCharacters(files), ["a.py:2: U+200D"]);
 });
+
+// A plan's "Spec coverage" table must name real tests, as `path::test name`
+// (docs/HARNESS_LOG.md, app-shell-and-design-system retro: rows claimed "3 vitest" for tests
+// that didn't exist). A Python name is a `def`; a vitest name is the quoted title passed to
+// `it` or `describe`, `%s` placeholders and all.
+const TEST_REFERENCE = /`([\w./-]+\.(?:py|tsx?|mjs))::([^`]+)`/g;
+
+function definesTest(source, file, name) {
+  if (source === null) return false;
+  if (file.endsWith(".py"))
+    return source.split("\n").some((line) => line.startsWith(`def ${name}(`));
+  return [`"${name}"`, `'${name}'`, `\`${name}\``].some((quoted) => source.includes(quoted));
+}
+
+export function planCoverage(plan, readSource) {
+  const unknown = [...plan.matchAll(TEST_REFERENCE)]
+    .filter(([, file, name]) => !definesTest(readSource(file), file, name))
+    .map(([, file, name]) => `${file}::${name}`);
+  const coverage = /^### Spec coverage\n([\s\S]*?)(?=^#{1,3} |(?![\s\S]))/m.exec(plan)?.[1] ?? "";
+  const rows = coverage
+    .split("\n")
+    .filter((line) => line.startsWith("|"))
+    .slice(2);
+  const unnamed = rows
+    .filter((row) => !new RegExp(TEST_REFERENCE.source).test(row))
+    .map((row) => row.split("|")[1].trim());
+  return { unknown, unnamed };
+}
+
+function readIfExists(file) {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+test("every plan's coverage table names tests that exist", () => {
+  const plans = readdirSync("docs/plans").filter((file) => /^PLAN_.*\.md$/.test(file));
+
+  for (const plan of plans) {
+    const { unknown, unnamed } = planCoverage(
+      readFileSync(`docs/plans/${plan}`, "utf8"),
+      readIfExists,
+    );
+    assert.deepEqual(unknown, [], `${plan}: these test references match no test.`);
+    assert.deepEqual(unnamed, [], `${plan}: name a test as \`path::test name\` in these rows.`);
+  }
+});
+
+test("planCoverage catches a row without a test and a reference to a missing test", () => {
+  const plan = [
+    "### Spec coverage",
+    "",
+    "| Criterion | Tests |",
+    "|---|---|",
+    "| Signs in | `e2e/test_journeys.py::test_sign_in` |",
+    "| Signs out | 2 vitest |",
+    "| Renamed | `src/App.test.tsx::shows the old name` |",
+    "",
+    "## Next section",
+    "| Not coverage | 3 vitest |",
+  ].join("\n");
+  const sources = {
+    "e2e/test_journeys.py": "def test_sign_in(page):\n    ...\n",
+    "src/App.test.tsx": 'it("shows the new name", () => {});',
+  };
+
+  assert.deepEqual(
+    planCoverage(plan, (file) => sources[file] ?? null),
+    { unknown: ["src/App.test.tsx::shows the old name"], unnamed: ["Signs out"] },
+  );
+});

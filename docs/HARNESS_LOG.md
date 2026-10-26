@@ -13,6 +13,68 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-26: The plan's coverage table named tests that didn't exist
+- Signal: repeated review feedback
+- What happened: The app-shell-and-design-system plan mapped each spec criterion to checks written as "3 vitest" or "2 outside plus inside E2E". At `/ship`, `code-reviewer` found four criteria that no test covered:
+  - focus return after Cancel and after success
+  - the home header buttons
+  - hints on two fields
+  - busy state on Search and Clear search
+
+  The table claimed "3 vitest" for some of them, but those tests didn't exist. This repeats the 2026-10-25 entry below, where a plan quietly narrowed the spec's coverage and nothing checked it.
+- Improvement: test. `scripts/harness-config.test.mjs` (`planCoverage`) now:
+  - fails when a `path::test name` reference in any `docs/plans/PLAN_*.md` matches no test (a Python `def`, or a quoted vitest title)
+  - fails when a row of a plan's "Spec coverage" table names no test
+
+  The app-shell plan's table was rewritten to name its tests. Proof: on the old table the check listed the 10 references that didn't resolve, and its unit test catches both a row with no test and a renamed test. A matching change to the `/plan` skill is drafted for approval.
+- Enforced: yes (unit stage, `scripts/harness-config.test.mjs`)
+
+## 2026-10-26: Third-party origins were only checked on screens a test opened
+- Signal: security issue
+- What happened: The spec forbids requests to other origins (fonts and icons must be bundled). The only check was the E2E `traffic` fixture, which sees only the screens a test opens. `security-reviewer` suggested enforcing it in source.
+- Improvement: safeguard. `frontend/src/origins.test.ts` scans `frontend/index.html`, `frontend/public/` and `frontend/src/**/*.{ts,tsx,css}` (test files excluded) for absolute or protocol-relative URLs. Only the SVG namespace is allowed. Proof: a Google Fonts `<link>` added to `index.html` failed exactly that file's case. Reverted.
+- Enforced: yes (unit stage, vitest)
+
+## 2026-10-26: A check would have passed without checking anything
+- Signal: successful pattern
+- What happened: The raw-colour scan first imported stylesheets with `?raw`. Vitest replaces imported CSS with an empty string, `?raw` included, so the scan saw 0 bytes and would have passed against anything. The plan's negative proof (plant `#ff0000`, expect a failure) caught it. The test now reads files from disk and asserts each one has content. In the same vein, review found two tests whose assertions held without the behaviour: the font-fallback test passed even if no font was requested, and a test named for a link's address checked only the title. Both were fixed to prove their trigger happened.
+- Improvement: test, plus a guideline drafted for approval. `frontend/src/theme/tokens.test.ts` asserts the scanned files are non-empty. Drafted for `docs/CODING_GUIDELINES.md`: "a test of an outcome also proves its trigger happened", and "read files under test from disk; vitest blanks imported CSS".
+- Enforced: yes for the scans (non-empty assertion); the guideline is documented only, pending approval (the `code-reviewer` subagent checks it)
+
+## 2026-10-26: Opening a PR took four attempts from the remote prompt
+- Signal: repetitive task
+- What happened: The human ran the `/ship` hand-over commands with `!` from the remote session.
+  - The two-command block didn't run.
+  - `gh` wasn't on Git Bash's PATH, though it's installed in `C:\Program Files\GitHub CLI`.
+  - The wrapped `gh pr create` line was split, so bash ran the PR body file as a script, which failed harmlessly on its first line.
+  - Once `gh` was found, the wrapped title was stored first with a line break and then with three spaces. It took a third `gh pr edit` to fix it.
+- Improvement: script. `scripts/open-pr.mjs` (`npm run pr -- <spec-name>`) takes the title from the spec's `# Spec:` heading and the body from `.git/PR_BODY_<name>.md`. It finds `gh` on PATH or where Windows installs it, and refuses names that aren't kebab-case. `scripts/open-pr.test.mjs` checks title extraction, that every spec has a usable title, and the Windows search paths. It's for the human: agents still never open PRs. A matching `/ship` hand-over change is drafted for approval.
+- Enforced: yes for the script's behaviour (unit stage); using it is documented only
+
+## 2026-10-26: A uvicorn worker kept port 8000 after its parent was stopped
+- Signal: harness defect
+- What happened: `docs/PROCESS.md` says to stop dev servers by port. Stopping the process that owned :8000 left the port held: Windows still reported the dead parent's PID, while its `multiprocessing` child (the reload worker) kept the socket. The worker had to be found by parent PID and stopped separately.
+- Improvement: guideline, drafted for approval. In `docs/PROCESS.md`, stop the whole tree (`taskkill /T /F /PID <pid>`), or stop children of the PID that `Get-NetTCPConnection` reports, then confirm the port is free.
+- Enforced: documented only (a process-tree kill is environment-specific; the E2E stage already refuses to start on a busy port)
+
+## 2026-10-26: STATUS still said "awaiting review" after the merge
+- Signal: harness defect
+- What happened: `/implement` set `docs/STATUS.md` to "awaiting `/ship` and review", and nothing updated it after PR #3 merged. `main` claimed work was in progress that had shipped.
+- Improvement: fixed in this retro. Drafted for approval: a `/retro` step to update STATUS's "In progress" once the PR has merged.
+- Enforced: documented only (a check can't know when a PR merged without network access)
+
+## 2026-10-26: A plan named a dependency version from memory
+- Signal: harness defect
+- What happened: The plan said `react-router` 7.x. `npm install` brought 8.5.0, the current release, which needs Node 22.22+. The API used was unchanged and `.nvmrc` (24) was fine, but the plan had to be corrected during implementation.
+- Improvement: guideline, drafted for approval. The `/plan` skill should check new dependencies' current versions and engine requirements (`npm view <pkg> version engines`, `uv pip index versions <pkg>`) before naming them.
+- Enforced: documented only
+
+## 2026-10-26: The guard stopped an unnecessary suppression comment
+- Signal: successful pattern
+- What happened: While writing `ui/Button.tsx`, an `eslint-disable-next-line` for a rule from a plugin this repo doesn't use was blocked by the guard hook before the file was written. The comment was simply removed.
+- Improvement: none needed. The safeguard worked as designed.
+- Enforced: yes (guard hook)
+
 ## 2026-10-25: Outside journeys shipped without inside tests
 - Signal: escaped defect
 - What happened: The members-and-groups spec says every journey gets an outside and an inside E2E test. The plan's phase 5 list quietly narrowed that, and implementation followed the plan. `code-reviewer` found four outside journeys with no inside test (taken user ID, reject, unknown group name, taken group name); they were added before the PR. Nothing checked the pairing. When this retro added the check, it found a fifth gap: the display-name markup journey had no inside test proving the browser sends no request.

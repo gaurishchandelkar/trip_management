@@ -11,6 +11,8 @@
   - pip-audit, npm audit and detect-secrets
   - a scan for invisible Unicode format characters in tracked source (`scripts/harness-config.test.mjs`)
   - a design-token contrast test (WCAG AA, both themes) and a scan that keeps raw colours out of every stylesheet but `tokens.css` (`frontend/src/theme/tokens.test.ts`)
+  - a scan that fails on any third-party URL in the frontend's sources (`frontend/src/origins.test.ts`)
+  - a check that every plan's "Spec coverage" table names real tests as `path::test name` (`scripts/harness-config.test.mjs`)
   - lefthook pre-commit
   - Claude Code permission rules, guard hook and format hook
 - **Verification:** `npm run check` runs build → lint → unit → integration → functional → security → architecture.
@@ -24,7 +26,7 @@
 
 ## In progress
 
-- **App shell and design system** (`docs/plans/PLAN_app-shell-and-design-system.md`) is implemented on branch `feat/app-shell-and-design-system`, awaiting `/ship` and review.
+- None. App shell and design system merged in PR #3 (`docs/plans/PLAN_app-shell-and-design-system.md`, status Done).
 
 ## Known gaps
 
