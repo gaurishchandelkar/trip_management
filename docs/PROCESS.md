@@ -85,6 +85,8 @@ Bug fixes and tweaks that need no design decision can skip stages 1–2, but the
 
 Stop every dev server you start. On Windows, `uvicorn --reload` leaves a worker process that outlives its parent, so stop it by port, not by its parent's PID.
 
+The port can still report the dead parent's PID while its `multiprocessing` child holds the socket. Stop the whole tree (`taskkill /T /F /PID <pid>`), or stop the processes whose parent is that PID. Then confirm the port is free: `Get-NetTCPConnection -LocalPort 8000,5173 -State Listen` returns nothing.
+
 For browser checks with the Playwright MCP server against `npm run dev`, open `http://localhost:5173`: Vite listens on `localhost`, which can resolve to `::1`, so `127.0.0.1:5173` may refuse the connection.
 
 ## Commits

@@ -37,7 +37,8 @@ Choose the strongest improvement you can: **enforced beats documented**. A lint 
 1. Add one entry per signal to `docs/HARNESS_LOG.md`, in the format at the top of that file.
 2. Implement the improvements that don't touch protected harness files, each with a test proving the safeguard catches the original problem.
 3. For changes to protected files (`.claude/`, `.github/`, `lefthook.yml`, rule docs), draft the change and ask the human to approve it.
-4. Run `npm run check` and commit with the message `retro: <summary>`.
+4. If the work's PR has merged, update `docs/STATUS.md`: take it out of **In progress** and describe it under **Current state**.
+5. Run `npm run check` and commit with the message `retro: <summary>`.
 
 ## Report
 

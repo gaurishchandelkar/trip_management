@@ -27,6 +27,16 @@ export default defineConfig(
           selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
           message: "Never use dangerouslySetInnerHTML (docs/SECURITY_GUIDELINES.md).",
         },
+        // A `javascript:` link runs code when followed (docs/SECURITY_GUIDELINES.md).
+        {
+          selector: "JSXAttribute[name.name=/^(href|to)$/] Literal[value=/^\\s*javascript:/i]",
+          message: "Never link to a javascript: URL (docs/SECURITY_GUIDELINES.md).",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^(href|to)$/] TemplateElement[value.raw=/^\\s*javascript:/i]",
+          message: "Never link to a javascript: URL (docs/SECURITY_GUIDELINES.md).",
+        },
       ],
     },
   },

@@ -23,7 +23,7 @@ Implement `docs/plans/PLAN_$ARGUMENTS.md`.
    3. Check every success criterion. For UI criteria, use the Playwright MCP browser.
    4. Tick the criteria in the plan and update `docs/STATUS.md`.
    5. Commit with the message `<plan name>: phase N - <summary>`. If the pre-commit hook fails, fix the cause and commit again.
-4. After the last phase, run the full `npm run check`, update `docs/SPEC.md` for any new behavior, and set the plan status to **Done**.
+4. After the last phase, bring the plan's `### Spec coverage` table up to date with the tests' final names. Then set the plan status to **Done**, run the full `npm run check` (which now requires every named test to exist), and update `docs/SPEC.md` for any new behavior.
 
 ## Rules
 
