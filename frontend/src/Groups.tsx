@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import {
@@ -25,16 +25,16 @@ import {
   DESCRIPTION_MAX_LENGTH,
   GROUP_NAME_HINT,
   GROUP_NAME_MAX_LENGTH,
+  GROUP_NAME_RULE,
   isValidGroupName,
+  JOIN_BY_NAME_RULE,
+  SEARCH_RULE,
 } from "./validation";
 
 export interface GroupsProps {
   /** Called when a call finds the session gone, so the app can return to sign-in. Keep stable. */
   onSignedOut: () => void;
 }
-
-const GROUP_NAME_RULE =
-  "Up to 60 letters, digits, spaces and - ' & . , starting with a letter or digit.";
 
 type OpenDialog = "create" | "join" | null;
 
@@ -208,7 +208,7 @@ function RequestByNameForm({
       <Field
         id="request-group-name"
         label="Group name"
-        hint="The group's exact name. Its owner decides."
+        hint={JOIN_BY_NAME_RULE}
         invalid={invalid}
         value={name}
         maxLength={GROUP_NAME_MAX_LENGTH}
@@ -234,14 +234,18 @@ function BrowseGroups({
   onSearch,
   onRequest,
   requesting,
+  searching,
   invalidSearch,
   feedback,
 }: {
   groups: Group[] | null;
-  onSearch: (search: string) => void;
+  /** Returns whether the search was sent: a term that fails its check isn't. */
+  onSearch: (search: string) => boolean;
   onRequest: (group: Group) => void;
   /** The group whose join request is in flight. */
   requesting: number | null;
+  /** A search is in flight. */
+  searching: boolean;
   invalidSearch: boolean;
   feedback: Feedback;
 }) {
@@ -250,8 +254,7 @@ function BrowseGroups({
   const [searched, setSearched] = useState("");
 
   function searchFor(term: string) {
-    setSearched(term);
-    onSearch(term);
+    if (onSearch(term)) setSearched(term);
   }
 
   return (
@@ -268,6 +271,7 @@ function BrowseGroups({
         <Field
           id="browse-search"
           label="Search by name"
+          hint={SEARCH_RULE}
           invalid={invalidSearch}
           value={search}
           maxLength={GROUP_NAME_MAX_LENGTH}
@@ -275,7 +279,7 @@ function BrowseGroups({
             setSearch(event.target.value);
           }}
         />
-        <Button type="submit">
+        <Button type="submit" busy={searching}>
           <Icon name="search" />
           Search
         </Button>
@@ -288,6 +292,7 @@ function BrowseGroups({
           action={
             searched !== "" && (
               <Button
+                busy={searching}
                 onClick={() => {
                   setSearch("");
                   searchFor("");
@@ -336,6 +341,8 @@ export function Groups({ onSignedOut }: GroupsProps) {
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [invalidSearch, setInvalidSearch] = useState(false);
   const [requesting, setRequesting] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
+  const newGroupButton = useRef<HTMLButtonElement>(null);
   useDocumentTitle("Groups");
 
   const failed = useCallback(
@@ -352,17 +359,22 @@ export function Groups({ onSignedOut }: GroupsProps) {
     browseGroups().then(setBrowsed).catch(failed);
   }, [failed]);
 
-  function browse(search: string) {
+  function browse(search: string): boolean {
     if (search !== "" && !isValidGroupName(search)) {
       setInvalidSearch(true);
       setFeedback(alert(GROUP_NAME_HINT));
-      return;
+      return false;
     }
     setInvalidSearch(false);
     setFeedback(null);
+    setSearching(true);
     browseGroups(search || undefined)
       .then(setBrowsed)
-      .catch(failed);
+      .catch(failed)
+      .finally(() => {
+        setSearching(false);
+      });
+    return true;
   }
 
   function markPending(groupId: number) {
@@ -394,6 +406,7 @@ export function Groups({ onSignedOut }: GroupsProps) {
             Join by name
           </Button>
           <Button
+            ref={newGroupButton}
             variant="primary"
             onClick={() => {
               open("create");
@@ -408,6 +421,9 @@ export function Groups({ onSignedOut }: GroupsProps) {
       <MyGroups
         groups={myGroups}
         onCreate={() => {
+          // The dialog returns focus to whatever had it when it opened. The empty state's
+          // button disappears once the group exists, so focus the header's New group instead.
+          newGroupButton.current?.focus();
           open("create");
         }}
       />
@@ -415,6 +431,7 @@ export function Groups({ onSignedOut }: GroupsProps) {
         groups={browsed}
         feedback={feedback}
         requesting={requesting}
+        searching={searching}
         invalidSearch={invalidSearch}
         onSearch={browse}
         onRequest={(group) => {
@@ -425,7 +442,8 @@ export function Groups({ onSignedOut }: GroupsProps) {
             })
             .catch(failed)
             .finally(() => {
-              setRequesting(null);
+              // Only if no other group's request has started since.
+              setRequesting((current) => (current === group.group_id ? null : current));
             });
         }}
       />

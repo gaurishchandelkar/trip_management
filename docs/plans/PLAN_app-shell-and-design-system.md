@@ -214,19 +214,19 @@ Success criteria:
 | Missing group | 2 E2E |
 | SPA fallback, `/api` untouched | 2 direct-load E2E |
 | Welcome panel layout | 3 E2E at 1280 and 360 |
-| Hints, `aria-describedby`, `aria-invalid` | 1 vitest |
+| Hints, `aria-describedby`, `aria-invalid` | `App.test.tsx::shows each field's rule before the member fails it`, `Groups.test.tsx::shows the search rule before the member fails it`, `opens Join by name with the group name field focused`, `marking invalid fields` (both files) |
 | My groups cards, Browse badges and buttons | 1 existing journeys plus vitest |
 | Empty My groups with **New group** | 3 vitest |
 | No results, Clear search | 3 vitest plus outside and inside E2E |
-| Header buttons, home shows only the lists | 3 vitest |
+| Header buttons, home shows only the lists | `Groups.test.tsx::offers New group as the main action and Join by name beside it, with no form open` |
 | Dialog opens and focuses the first field | 3 vitest |
-| Escape or Cancel closes it, no request, focus returns | 3 vitest plus E2E |
-| Dialog success: closes, status, same calls | 3 vitest plus existing inside E2E |
+| Escape or Cancel closes it, no request, focus returns | `test_journeys.py::test_closing_a_dialog_returns_focus_to_its_opener` (Escape on New group, Cancel on Join by name), `test_network_contract.py::test_closing_a_dialog_sends_nothing`, `Groups.test.tsx::sends nothing when cancelled` |
+| Dialog success: closes, status, same calls | `Groups.test.tsx::creates the group and reloads my groups`, `asks by name and marks the listed group pending`; `test_journeys.py::test_creating_a_group_returns_focus_to_new_group`; `test_network_contract.py::test_create_group_posts_once_then_reloads_my_groups`, `test_request_by_name_posts_the_name_once` |
 | Dialog failure stays open with text kept | 3 vitest plus existing duplicate-name and unknown-name E2E |
 | Group header, badge, Back link | 1 badge vitest; 2 Back link E2E |
 | Members with avatars | 1 vitest |
 | Pending requests with avatars and button styles | 1 vitest plus existing approve and reject E2E |
-| Busy buttons, one request on double click | 1 vitest |
+| Busy buttons, one request on double click | `Groups.test.tsx::while a request is in flight` (create, request by name, request from list, decision, Search, Clear search, and a later request staying busy) |
 | Skeletons with "Loading…" | 1 vitest; 4 E2E |
 | Callouts keep roles and text | 1 vitest plus all existing E2E |
 | Focus ring at least 3:1 | 1 contrast test plus MCP check |
@@ -234,3 +234,30 @@ Success criteria:
 | 360 px, no horizontal scroll with long text | 4 E2E |
 | Reduced motion | 4 E2E |
 | Contrast at least 4.5:1 and 3:1 | 1 contrast test |
+
+## Review fixes (`/ship`)
+
+The `code-reviewer` found four blocking gaps. The coverage table above claimed tests for some rows that didn't exist: "3 vitest" for focus return and for the header buttons. The rows above now name their tests.
+
+- **B1:** focus return after Cancel and after success, and first-field focus for Join by name. Added `test_closing_a_dialog_returns_focus_to_its_opener` (replaces the Escape-only journey) and `test_creating_a_group_returns_focus_to_new_group`.
+- **B2:** the header buttons' styles, and no form open before a dialog. Added a vitest.
+- **B3:** the sign-in User ID and Search by name had no hint. Both have one now, and every rule string lives in `validation.ts` next to its pattern. The group-name rule now says "with single spaces", and the join-by-name rule now says capitals don't matter, matching `docs/SPEC.md`.
+- **B4:** Search and Clear search weren't busy while their request ran. Both are now, with double-click tests. Removing `busy` from Search makes the test fail.
+
+Non-blocking findings also fixed:
+- A finished request no longer re-enables a different, still-running one.
+- Sign-out ordering is pinned by `test_sign_out_from_a_group_sends_only_the_sign_out` and a vitest assertion. Explicit sign-out replaces the history entry, so Back can't return to the last group (also raised by the `security-reviewer`).
+- The group link test checks `href`.
+- The font-fallback test proves a font was requested and blocked, and that the stack ends in `system-ui`.
+- The touch-target check covers width, inputs, the sign-in screen and an open dialog.
+- Focus lands on the header's New group after creating from the empty state. Removing the fix makes the journey fail.
+- `Dialog` uses a layout effect, so it never paints empty.
+- Motion and size values became tokens, and the stylesheet comments say what may be written by hand.
+- `index.html` and the favicon are tested against `--color-brand`.
+- Unused tokens and exports were removed.
+- A loading group's tab reads "Group · Caravan".
+- Clear search only follows a search that was sent.
+
+Implementation notes the review asked to record:
+- `AppHeader` and `SkipLink` live inline in `App.tsx` rather than in `ui/`: each is used once and owns session behaviour.
+- The font budget is measured as the bytes a browser fetches (48 KB, Latin only). `import "@fontsource-variable/inter"` bundles all seven subsets (224 KB of `woff2` in `dist/`), of which a browser downloads only the subsets a page uses. This is left for the human to decide (see the PR).

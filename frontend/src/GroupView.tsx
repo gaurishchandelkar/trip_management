@@ -119,7 +119,8 @@ function GroupView({ groupId, onSignedOut }: GroupViewProps) {
         else if (!(error instanceof NotFoundError)) setFeedback(alert(messageFor(error)));
       })
       .finally(() => {
-        setDeciding(null);
+        // Only if no other decision has started since.
+        setDeciding((current) => (current === requestId ? null : current));
         setVersion((n) => n + 1);
       });
   }
@@ -129,7 +130,7 @@ function GroupView({ groupId, onSignedOut }: GroupViewProps) {
       ? loaded.group.name
       : loaded.status === "missing"
         ? "Group not found"
-        : null,
+        : "Group",
   );
 
   return (

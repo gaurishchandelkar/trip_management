@@ -22,11 +22,12 @@ function SessionMenu({ member, onSignedOut }: { member: Member; onSignedOut: () 
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
 
-  // An explicit sign-out starts the next member at home, not on the last group opened here.
-  // Signed out first, so the home screen never mounts and loads its lists on the way.
+  // An explicit sign-out starts the next member at home, not on the last group opened here, and
+  // replaces that group's history entry so Back doesn't return to it. The inside E2E test
+  // test_sign_out_from_a_group_sends_only_the_sign_out pins that Home never loads on the way.
   function signedOut() {
     onSignedOut();
-    void navigate("/");
+    void navigate("/", { replace: true });
   }
 
   return (

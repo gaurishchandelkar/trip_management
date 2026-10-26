@@ -90,6 +90,16 @@ describe.each([
   });
 });
 
+describe("brand colour outside the stylesheets", () => {
+  // The browser chrome and tab icon can't read CSS tokens, so they repeat the brand colour.
+  it.each(["index.html", "public/favicon.svg"])("%s uses the light --color-brand", (file) => {
+    const brand = light.get("--color-brand") ?? "";
+    expect(brand).toMatch(/^#[0-9a-f]{6}$/i);
+
+    expect(readFileSync(`${SRC}/../${file}`, "utf8").toLowerCase()).toContain(brand.toLowerCase());
+  });
+});
+
 describe("raw colours", () => {
   it("found the stylesheets to scan, with their contents", () => {
     expect(Object.keys(stylesheets)).toEqual(

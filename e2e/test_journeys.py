@@ -329,9 +329,10 @@ def test_missing_group_says_so(page: Page) -> None:
     expect(page.get_by_role("link", name="Back to groups")).to_have_attribute("href", "/")
 
 
-def test_escape_closes_the_new_group_dialog_and_returns_focus(page: Page) -> None:
+def test_closing_a_dialog_returns_focus_to_its_opener(page: Page) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
-    opener = page.get_by_role("button", name="New group", exact=True).first
+    new_group = page.get_by_role("button", name="New group", exact=True).first
+    join_by_name = page.get_by_role("button", name="Join by name", exact=True)
 
     create_form = open_dialog(page, "New group", "Create group")
     expect(create_form.get_by_label("Name")).to_be_focused()
@@ -340,7 +341,32 @@ def test_escape_closes_the_new_group_dialog_and_returns_focus(page: Page) -> Non
 
     expect(page.get_by_role("dialog")).to_have_count(0)
     expect(form(page, "Create group")).to_have_count(0)
-    expect(opener).to_be_focused()
+    expect(new_group).to_be_focused()
+
+    by_name = open_dialog(page, "Join by name", "Request to join")
+    expect(by_name.get_by_label("Group name")).to_be_focused()
+    by_name.get_by_role("button", name="Cancel").click()
+
+    expect(form(page, "Request to join")).to_have_count(0)
+    expect(join_by_name).to_be_focused()
+
+
+def test_creating_a_group_returns_focus_to_new_group(page: Page) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    # A new member starts with the empty state's own New group button.
+    section(page, "My groups").get_by_role("button", name="New group").click()
+    create_form = form(page, "Create group")
+    create_form.get_by_label("Name").fill(unique_group_name("Goa"))
+
+    with page.expect_response(api("GET", "/api/me/groups")):
+        create_form.get_by_role("button", name="Create group").click()
+
+    # The empty state is gone with its button, so focus lands on the header's New group.
+    expect(section(page, "My groups").get_by_role("listitem")).to_have_count(1)
+    expect(page.get_by_role("button", name="New group", exact=True)).to_be_focused()
+
+    create_group(page, unique_group_name("Ladakh"))
+    expect(page.get_by_role("button", name="New group", exact=True)).to_be_focused()
 
 
 def test_clear_search_shows_every_group_again(page: Page) -> None:
@@ -404,9 +430,16 @@ def test_no_screen_scrolls_sideways_on_a_phone(page: Page) -> None:
 def test_buttons_and_links_are_easy_to_tap_on_a_phone(page: Page) -> None:
     page.set_viewport_size(PHONE)
     name = unique_group_name("Goa")
+    load_signed_out(page)
+    assert small_targets(page) == []
+
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
     create_group(page, name, "Beach week")
     assert small_targets(page) == []
+
+    open_dialog(page, "New group", "Create group")
+    assert small_targets(page) == []
+    page.keyboard.press("Escape")
 
     open_group(page, "My groups", name)
     assert small_targets(page) == []
@@ -439,11 +472,20 @@ def test_reduced_motion_stops_animation(page: Page) -> None:
 
 
 def test_text_shows_in_a_system_font_when_the_web_font_fails(page: Page) -> None:
-    page.route("**/*.woff2", lambda route: route.abort())
+    aborted: list[str] = []
+
+    def block(route: Route) -> None:
+        aborted.append(route.request.url)
+        route.abort()
+
+    page.route("**/*.woff2", block)
 
     load_signed_out(page)
 
     sign_in_form = form(page, "Sign in")
+    expect(sign_in_form).to_have_css("font-family", re.compile(r"Inter Variable.*system-ui"))
     expect(sign_in_form.get_by_role("heading", name="Sign in")).to_be_visible()
     expect(sign_in_form.get_by_label("User ID")).to_be_visible()
     expect(sign_in_form.get_by_role("button", name="Sign in")).to_be_visible()
+    # The page did ask for the web font, and was refused: the text above is the fallback.
+    assert aborted, "no web font was requested"

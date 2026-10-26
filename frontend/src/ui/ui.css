@@ -1,4 +1,5 @@
-/* Reusable components. Values come from theme/tokens.css only. */
+/* Reusable components. Colours, spacing, radius, shadows, type, sizes and motion come from
+   theme/tokens.css; only borders, opacities and em-relative details are written here. */
 
 .icon {
   width: 1.125em;
@@ -30,7 +31,7 @@
 
 /* Offset, so the ring stays visible against a button of the same colour. */
 .button:focus-visible {
-  outline-offset: 3px;
+  outline-offset: var(--focus-ring-offset-button);
 }
 
 .button:disabled {
@@ -204,8 +205,8 @@
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border-radius: var(--radius-full);
   background: var(--color-avatar-bg);
   color: var(--color-avatar-text);
@@ -222,10 +223,10 @@
 }
 
 .skeleton {
-  height: 4.5rem;
+  height: var(--skeleton-height);
   border-radius: var(--radius-lg);
   background: var(--color-skeleton);
-  animation: skeleton-pulse 1.4s var(--ease) infinite;
+  animation: skeleton-pulse var(--duration-pulse) var(--ease) infinite;
 }
 
 @keyframes skeleton-pulse {

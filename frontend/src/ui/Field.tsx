@@ -1,6 +1,6 @@
 import type { InputHTMLAttributes } from "react";
 
-export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
+interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   id: string;
   label: string;
   /** The rule for the field, shown before the member fails it. */

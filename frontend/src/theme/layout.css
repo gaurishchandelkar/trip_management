@@ -1,4 +1,5 @@
-/* Screen layouts. Values come from theme/tokens.css only. */
+/* Screen layouts. Colours, spacing, radius, shadows, type, sizes and motion come from
+   theme/tokens.css; only borders, breakpoints and layout ratios are written here. */
 
 .app {
   width: min(var(--content-width), 100% - 2 * var(--space-4));
@@ -41,7 +42,7 @@
 
 .app-header__inner {
   width: min(var(--content-width), 100% - 2 * var(--space-4));
-  min-height: 4rem;
+  min-height: var(--header-height);
   margin-inline: auto;
   padding-block: var(--space-3);
   display: flex;

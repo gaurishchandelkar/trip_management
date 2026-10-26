@@ -146,16 +146,24 @@ def sideways_overflow(page: Page) -> int:
 
 
 def small_targets(page: Page, minimum: int = 44) -> list[str]:
-    """Visible buttons and links shorter than the minimum touch target, for the failure message."""
+    """Visible buttons, links and fields under the minimum touch target in either direction.
+
+    Only what's reachable: with a modal dialog open, the page behind it can't be tapped.
+    """
     return page.evaluate(
-        """(minimum) => [...document.querySelectorAll("button, a")]
+        """(minimum) => {
+          const modal = document.querySelector("dialog[open]");
+          return [...(modal ?? document).querySelectorAll("button, a, input")]
             .filter((element) => {
               const box = element.getBoundingClientRect();
-              return box.width > 0 && box.height > 0 && box.height < minimum;
+              const shown = box.width > 0 && box.height > 0;
+              return shown && (box.width < minimum || box.height < minimum);
             })
             .map((element) => {
-              const height = element.getBoundingClientRect().height;
-              return `${element.textContent.trim()} (${height}px)`;
-            })""",
+              const box = element.getBoundingClientRect();
+              const name = element.textContent.trim() || element.id;
+              return `${name} (${box.width}x${box.height}px)`;
+            });
+        }""",
         minimum,
     )

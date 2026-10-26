@@ -291,6 +291,9 @@ describe("app shell", () => {
 
     expect(await screen.findByRole("region", { name: "My groups" })).toBeInTheDocument();
     expect(getGroup).toHaveBeenCalledTimes(1);
+    // Once, after signing in again: home never loaded on the way out.
+    expect(getMyGroups).toHaveBeenCalledTimes(1);
+    expect(browseGroups).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -319,10 +322,16 @@ describe("marking invalid fields", () => {
     expect(within(signInForm()).getByLabelText(field)).toHaveAttribute("aria-invalid", "true");
   });
 
-  it("shows each register rule before the member fails it", async () => {
+  it("shows each field's rule before the member fails it", async () => {
     await renderSignedOut();
 
     expect(within(registerForm()).getByLabelText("User ID")).toHaveAccessibleDescription(
+      "3–30 letters, digits, - or _, starting with a letter.",
+    );
+    expect(within(registerForm()).getByLabelText("Display name")).toHaveAccessibleDescription(
+      "Up to 50 letters, with single spaces, hyphens or apostrophes.",
+    );
+    expect(within(signInForm()).getByLabelText("User ID")).toHaveAccessibleDescription(
       "3–30 letters, digits, - or _, starting with a letter.",
     );
   });

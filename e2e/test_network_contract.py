@@ -5,6 +5,7 @@ Each test waits for the specific response it expects, then asserts every /api/ c
 
 from collections.abc import Iterator
 from typing import cast
+from urllib.parse import urlsplit
 
 import pytest
 from playwright.sync_api import Browser, Page, expect
@@ -156,7 +157,10 @@ def test_sign_in_loads_my_groups_and_the_browse_list_once(page: Page, traffic: A
     assert calls[4].status == 200
 
 
-@covers("test_owner_approves_a_member_who_found_the_group_by_browsing")
+@covers(
+    "test_owner_approves_a_member_who_found_the_group_by_browsing",
+    "test_creating_a_group_returns_focus_to_new_group",
+)
 def test_create_group_posts_once_then_reloads_my_groups(page: Page, traffic: ApiTraffic) -> None:
     name = unique_group_name("Goa")
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
@@ -491,7 +495,7 @@ def test_missing_group_asks_once_and_gets_a_generic_404(page: Page, traffic: Api
     assert (calls[1].status, calls[1].json()) == (404, {"detail": "Not found"})
 
 
-@covers("test_escape_closes_the_new_group_dialog_and_returns_focus")
+@covers("test_closing_a_dialog_returns_focus_to_its_opener")
 def test_closing_a_dialog_sends_nothing(page: Page, traffic: ApiTraffic) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
     before = len(traffic.api_calls())
@@ -566,3 +570,16 @@ def test_motion_and_font_preferences_make_no_calls(page: Page, traffic: ApiTraff
 
     calls = traffic.api_calls()
     assert [call.signature for call in calls] == [ME], traffic.describe()
+
+
+@covers("test_sign_out_returns_to_sign_in")
+def test_sign_out_from_a_group_sends_only_the_sign_out(page: Page, traffic: ApiTraffic) -> None:
+    _open_new_group(page, unique_user_id("ada"))
+    before = len(traffic.api_calls())
+
+    sign_out(page)
+    expect(form(page, "Sign in")).to_be_visible()
+
+    calls = traffic.api_calls()[before:]
+    assert [call.signature for call in calls] == [SIGN_OUT], traffic.describe()
+    assert urlsplit(page.url).path == "/"

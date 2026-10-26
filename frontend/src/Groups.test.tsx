@@ -128,6 +128,34 @@ describe("home", () => {
   });
 });
 
+describe("home header", () => {
+  it("offers New group as the main action and Join by name beside it, with no form open", async () => {
+    await renderGroups();
+
+    const [newGroup] = screen.getAllByRole("button", { name: "New group" });
+    expect(newGroup).toHaveClass("button--primary");
+    expect(screen.getByRole("button", { name: "Join by name" })).toHaveClass("button--secondary");
+    expect(screen.getByRole("heading", { level: 2, name: "Groups" })).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Create group" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Request to join" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens Join by name with the group name field focused", async () => {
+    await renderGroups();
+
+    await openDialog("Join by name");
+
+    expect(screen.getByRole("dialog", { name: "Request to join" })).toBeInTheDocument();
+    expect(within(form("Request to join")).getByLabelText("Group name")).toHaveFocus();
+    expect(
+      within(form("Request to join")).getByLabelText("Group name"),
+    ).toHaveAccessibleDescription(
+      "The group's full name. Capitals don't matter. Its owner decides.",
+    );
+  });
+});
+
 describe("creating a group", () => {
   async function create(name: string, description = "") {
     await openDialog("New group");
@@ -378,6 +406,24 @@ describe("searching", () => {
 
     expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
   });
+
+  it("offers no clear button for a term that failed its check and was never sent", async () => {
+    await renderGroups();
+
+    await userEvent.type(screen.getByLabelText("Search by name"), "100%");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(screen.getByText("No groups found.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+  });
+
+  it("shows the search rule before the member fails it", async () => {
+    await renderGroups();
+
+    expect(screen.getByLabelText("Search by name")).toHaveAccessibleDescription(
+      "Part of a group's name: letters, digits, spaces and - ' & . ,",
+    );
+  });
 });
 
 describe("group detail", () => {
@@ -508,8 +554,16 @@ describe("group detail", () => {
   });
 
   it("links each group to its own address and names the tab after it", async () => {
-    await open(detail());
+    vi.mocked(browseGroups).mockResolvedValue([group()]);
+    renderRoutes();
 
+    expect(
+      await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
+    ).toHaveAttribute("href", "/groups/1");
+
+    vi.mocked(getGroup).mockResolvedValue(detail());
+    await userEvent.click(within(section("Browse groups")).getByRole("link", { name: "Goa 2027" }));
+    await screen.findByRole("heading", { name: "Goa 2027" });
     expect(document.title).toBe("Goa 2027 · Caravan");
   });
 });
@@ -599,6 +653,51 @@ describe("while a request is in flight", () => {
 
     expect(requestToJoin).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Request to join Goa 2027" })).toBeDisabled();
+  });
+
+  it("sends one search for a double click", async () => {
+    await renderGroups();
+    vi.mocked(browseGroups).mockClear().mockReturnValue(inFlight());
+    await userEvent.type(screen.getByLabelText("Search by name"), "Goa");
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Search" }));
+
+    expect(browseGroups).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Search" })).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("sends one unfiltered browse for a double click on Clear search", async () => {
+    await renderGroups();
+    await userEvent.type(screen.getByLabelText("Search by name"), "Goa");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    vi.mocked(browseGroups).mockClear().mockReturnValue(inFlight());
+
+    await userEvent.dblClick(await screen.findByRole("button", { name: "Clear search" }));
+
+    expect(browseGroups).toHaveBeenCalledTimes(1);
+    expect(browseGroups).toHaveBeenCalledWith(undefined);
+  });
+
+  it("keeps a later request busy when an earlier one answers first", async () => {
+    let answerGoa: (request: typeof PENDING) => void = () => undefined;
+    vi.mocked(browseGroups).mockResolvedValue([group(), group({ group_id: 2, name: "Kerala" })]);
+    vi.mocked(requestToJoin)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerGoa = resolve;
+        }),
+      )
+      .mockReturnValueOnce(inFlight());
+    renderRoutes();
+    await userEvent.click(await screen.findByRole("button", { name: "Request to join Goa 2027" }));
+    await userEvent.click(screen.getByRole("button", { name: "Request to join Kerala" }));
+
+    answerGoa(PENDING);
+
+    expect(
+      await within(section("Browse groups")).findByText("Request pending"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Request to join Kerala" })).toBeDisabled();
   });
 
   it("sends one decision for a double click, and holds both buttons", async () => {

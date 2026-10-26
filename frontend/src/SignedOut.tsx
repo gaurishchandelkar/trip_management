@@ -14,15 +14,14 @@ import { Field } from "./ui/Field";
 import {
   DISPLAY_NAME_HINT,
   DISPLAY_NAME_MAX_LENGTH,
+  DISPLAY_NAME_RULE,
   isValidDisplayName,
   isValidUserId,
   PASSWORD_MAX_LENGTH,
   USER_ID_HINT,
   USER_ID_MAX_LENGTH,
+  USER_ID_RULE,
 } from "./validation";
-
-const USER_ID_RULE = "3–30 letters, digits, - or _, starting with a letter.";
-const DISPLAY_NAME_RULE = "Up to 50 letters, with single spaces, hyphens or apostrophes.";
 
 function RegisterForm() {
   const [userId, setUserId] = useState("");
@@ -144,6 +143,7 @@ function SignInForm({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
       <Field
         id="sign-in-user-id"
         label="User ID"
+        hint={USER_ID_RULE}
         invalid={invalid === "user-id"}
         value={userId}
         maxLength={USER_ID_MAX_LENGTH}
