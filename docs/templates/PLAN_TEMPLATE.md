@@ -29,4 +29,12 @@ Success criteria:
 ## Final verification
 
 - [ ] `npm run check` passes
-- [ ] Every acceptance criterion in the spec is covered by a test
+- [ ] Every acceptance criterion in the spec is covered by a test (table below)
+
+### Spec coverage
+
+Name each test as `path::test name`: a Python `def`, or a vitest title exactly as quoted. `scripts/harness-config.test.mjs` fails on a row that names no test, and, once Status is **Done**, on a name that matches no test.
+
+| Spec acceptance criterion | Tests |
+|---|---|
+| <criterion> | `e2e/test_journeys.py::test_<journey>`, `frontend/src/<File>.test.tsx::<title>` |

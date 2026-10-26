@@ -3,11 +3,24 @@
 // One short command, because a long `gh pr create` line wraps in a terminal and the break ends up
 // in the PR title, and gh may be installed but missing from Git Bash's PATH
 // (docs/HARNESS_LOG.md, app-shell-and-design-system retro).
+// Screenshots that /ship saved to .playwright-mcp/pr-<spec-name>/ are attached below the body.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const SPEC_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MEDIA = /\.(?:png|jpe?g|gif|webp|mp4)$/i;
+
+/** `--attach` arguments for each image in the folder, in name order, with alt text from the name. */
+export function attachArgs(dir, files) {
+  return files
+    .filter((file) => MEDIA.test(file))
+    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
+    .flatMap((file) => {
+      const alt = file.replace(MEDIA, "").replace(/^\d+-/, "").replaceAll("-", " ");
+      return ["--attach", `${dir}/${file}#${alt}`];
+    });
+}
 
 export function specTitle(spec) {
   return /^# Spec: (.+)$/m.exec(spec)?.[1].trim() ?? null;
@@ -45,9 +58,12 @@ function main() {
   if (gh === undefined)
     return fail("GitHub CLI (gh) not found. Install it: https://cli.github.com");
 
-  const { status } = spawnSync(gh, ["pr", "create", "--title", title, "--body-file", bodyPath], {
-    stdio: "inherit",
-  });
+  const screenshots = `.playwright-mcp/pr-${name}`;
+  const attachments = existsSync(screenshots)
+    ? attachArgs(screenshots, readdirSync(screenshots))
+    : [];
+  const args = ["pr", "create", "--title", title, "--body-file", bodyPath, ...attachments];
+  const { status } = spawnSync(gh, args, { stdio: "inherit" });
   process.exitCode = status ?? 1;
 }
 

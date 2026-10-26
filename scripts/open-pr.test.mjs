@@ -2,7 +2,25 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { ghCandidates, specTitle } from "./open-pr.mjs";
+import { attachArgs, ghCandidates, specTitle } from "./open-pr.mjs";
+
+test("attachArgs attaches images in numeric order, with alt text from the name", () => {
+  const files = [
+    "10-not-found-360-light.png",
+    "notes.txt",
+    "2-home-1280-dark.png",
+    "1-sign-in.PNG",
+  ];
+
+  assert.deepEqual(attachArgs(".playwright-mcp/pr-x", files), [
+    "--attach",
+    ".playwright-mcp/pr-x/1-sign-in.PNG#sign in",
+    "--attach",
+    ".playwright-mcp/pr-x/2-home-1280-dark.png#home 1280 dark",
+    "--attach",
+    ".playwright-mcp/pr-x/10-not-found-360-light.png#not found 360 light",
+  ]);
+});
 
 test("specTitle reads the title from the spec heading", () => {
   assert.equal(

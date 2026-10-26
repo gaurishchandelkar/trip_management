@@ -51,6 +51,8 @@ The frontend follows the same idea: components render, `api.ts` talks to the bac
 - Tests are deterministic, with no real network calls, sleeps or order dependence.
 - Make time and concurrency deterministic: inject the clock through a FastAPI dependency and override it in tests (`app.dependency_overrides`), and test races with threads started together on a `threading.Barrier`, never with sleeps.
 - Assert through public interfaces: HTTP responses, the OpenAPI schema, the rendered DOM. Never assert on framework internals.
+- A test of an outcome also proves its trigger happened. "Text shows when the font fails" asserts the font was requested and refused; "no extra calls" asserts the expected call was made. Otherwise the test passes when nothing happens at all.
+- A test that scans files reads them from disk and asserts it found some, with content. Vitest replaces imported CSS, even `?raw`, with an empty string, so an import-based scan passes against anything (`frontend/src/theme/tokens.test.ts`).
 - Tests start the processes they verify and never reuse an already-running server. Use `127.0.0.1`, not `localhost`, because `localhost` can resolve to `::1`.
 - *Enforced by:* the 80% line and branch coverage gates in `npm run check`.
 

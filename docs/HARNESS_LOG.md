@@ -26,8 +26,21 @@ Entry format:
   - fails when a `path::test name` reference in any `docs/plans/PLAN_*.md` matches no test (a Python `def`, or a quoted vitest title)
   - fails when a row of a plan's "Spec coverage" table names no test
 
-  The app-shell plan's table was rewritten to name its tests. Proof: on the old table the check listed the 10 references that didn't resolve, and its unit test catches both a row with no test and a renamed test. A matching change to the `/plan` skill is drafted for approval.
+  The app-shell plan's table was rewritten to name its tests. Proof: on the old table the check listed the 10 references that didn't resolve, and its unit test catches both a row with no test and a renamed test.
+
+  Approved by the human:
+  - `/plan` adds the table with every test named.
+  - `docs/templates/PLAN_TEMPLATE.md` carries it.
+  - `/implement` brings the names up to date before setting the plan to Done.
+
+  Every row must name a test at all times. The named tests must exist only once the plan is **Done** (`isDone`), because during `/implement` they're still being written.
 - Enforced: yes (unit stage, `scripts/harness-config.test.mjs`)
+
+## 2026-10-26: Nothing stopped a `javascript:` link
+- Signal: security issue
+- What happened: `security-reviewer` found no `javascript:` links, but only because every `href` and `to` happened to be a fixed path. No rule would stop one.
+- Improvement: safeguard, approved by the human. `eslint.config.js` `no-restricted-syntax` now bans a `javascript:` URL (any case) in an `href` or `to` attribute, as a string, an expression or a template literal. Proof: a probe file with one of each got 3 errors, and its plain `/groups/1` link none. Deleted.
+- Enforced: yes (lint stage)
 
 ## 2026-10-26: Third-party origins were only checked on screens a test opened
 - Signal: security issue
@@ -38,8 +51,8 @@ Entry format:
 ## 2026-10-26: A check would have passed without checking anything
 - Signal: successful pattern
 - What happened: The raw-colour scan first imported stylesheets with `?raw`. Vitest replaces imported CSS with an empty string, `?raw` included, so the scan saw 0 bytes and would have passed against anything. The plan's negative proof (plant `#ff0000`, expect a failure) caught it. The test now reads files from disk and asserts each one has content. In the same vein, review found two tests whose assertions held without the behaviour: the font-fallback test passed even if no font was requested, and a test named for a link's address checked only the title. Both were fixed to prove their trigger happened.
-- Improvement: test, plus a guideline drafted for approval. `frontend/src/theme/tokens.test.ts` asserts the scanned files are non-empty. Drafted for `docs/CODING_GUIDELINES.md`: "a test of an outcome also proves its trigger happened", and "read files under test from disk; vitest blanks imported CSS".
-- Enforced: yes for the scans (non-empty assertion); the guideline is documented only, pending approval (the `code-reviewer` subagent checks it)
+- Improvement: test, plus a guideline approved by the human. `frontend/src/theme/tokens.test.ts` asserts the scanned files are non-empty. `docs/CODING_GUIDELINES.md` (Tests) now says that a test of an outcome also proves its trigger happened, and that a test scanning files reads them from disk and asserts it found some.
+- Enforced: yes for the scans (non-empty assertion); the guideline is documented only (the `code-reviewer` subagent checks it)
 
 ## 2026-10-26: Opening a PR took four attempts from the remote prompt
 - Signal: repetitive task
@@ -48,25 +61,25 @@ Entry format:
   - `gh` wasn't on Git Bash's PATH, though it's installed in `C:\Program Files\GitHub CLI`.
   - The wrapped `gh pr create` line was split, so bash ran the PR body file as a script, which failed harmlessly on its first line.
   - Once `gh` was found, the wrapped title was stored first with a line break and then with three spaces. It took a third `gh pr edit` to fix it.
-- Improvement: script. `scripts/open-pr.mjs` (`npm run pr -- <spec-name>`) takes the title from the spec's `# Spec:` heading and the body from `.git/PR_BODY_<name>.md`. It finds `gh` on PATH or where Windows installs it, and refuses names that aren't kebab-case. `scripts/open-pr.test.mjs` checks title extraction, that every spec has a usable title, and the Windows search paths. It's for the human: agents still never open PRs. A matching `/ship` hand-over change is drafted for approval.
-- Enforced: yes for the script's behaviour (unit stage); using it is documented only
+- Improvement: script. `scripts/open-pr.mjs` (`npm run pr -- <spec-name>`) takes the title from the spec's `# Spec:` heading and the body from `.git/PR_BODY_<name>.md`. It finds `gh` on PATH or where Windows installs it, and refuses names that aren't kebab-case. `scripts/open-pr.test.mjs` checks title extraction, that every spec has a usable title, and the Windows search paths. It's for the human: agents still never open PRs. Approved by the human: `/ship` now hands over `npm run pr -- <name>`, one short command per line. It saves final-UI screenshots to `.playwright-mcp/pr-<name>/`, which the script attaches with `gh pr create --attach` (gh 2.103+). Contrary to what this session first told the human, `gh` can upload images to a PR.
+- Enforced: yes for the script's behaviour (unit stage); using it is documented only, in the `/ship` skill
 
 ## 2026-10-26: A uvicorn worker kept port 8000 after its parent was stopped
 - Signal: harness defect
 - What happened: `docs/PROCESS.md` says to stop dev servers by port. Stopping the process that owned :8000 left the port held: Windows still reported the dead parent's PID, while its `multiprocessing` child (the reload worker) kept the socket. The worker had to be found by parent PID and stopped separately.
-- Improvement: guideline, drafted for approval. In `docs/PROCESS.md`, stop the whole tree (`taskkill /T /F /PID <pid>`), or stop children of the PID that `Get-NetTCPConnection` reports, then confirm the port is free.
+- Improvement: guideline, approved by the human. `docs/PROCESS.md` (Background processes) now says to stop the whole tree (`taskkill /T /F /PID <pid>`), or the children of the PID that `Get-NetTCPConnection` reports, then confirm the port is free.
 - Enforced: documented only (a process-tree kill is environment-specific; the E2E stage already refuses to start on a busy port)
 
 ## 2026-10-26: STATUS still said "awaiting review" after the merge
 - Signal: harness defect
 - What happened: `/implement` set `docs/STATUS.md` to "awaiting `/ship` and review", and nothing updated it after PR #3 merged. `main` claimed work was in progress that had shipped.
-- Improvement: fixed in this retro. Drafted for approval: a `/retro` step to update STATUS's "In progress" once the PR has merged.
+- Improvement: fixed in this retro. Approved by the human: `/retro` now has a step to move merged work out of STATUS's "In progress".
 - Enforced: documented only (a check can't know when a PR merged without network access)
 
 ## 2026-10-26: A plan named a dependency version from memory
 - Signal: harness defect
 - What happened: The plan said `react-router` 7.x. `npm install` brought 8.5.0, the current release, which needs Node 22.22+. The API used was unchanged and `.nvmrc` (24) was fine, but the plan had to be corrected during implementation.
-- Improvement: guideline, drafted for approval. The `/plan` skill should check new dependencies' current versions and engine requirements (`npm view <pkg> version engines`, `uv pip index versions <pkg>`) before naming them.
+- Improvement: guideline, approved by the human. The `/plan` skill now checks a new dependency's current version and requirements (`npm view <pkg> version engines peerDependencies`, `uv pip index versions <pkg>`) before naming it.
 - Enforced: documented only
 
 ## 2026-10-26: The guard stopped an unnecessary suppression comment

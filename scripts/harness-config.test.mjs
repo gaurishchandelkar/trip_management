@@ -144,8 +144,13 @@ test("hiddenCharacters reports the file, line and code point", () => {
 // A plan's "Spec coverage" table must name real tests, as `path::test name`
 // (docs/HARNESS_LOG.md, app-shell-and-design-system retro: rows claimed "3 vitest" for tests
 // that didn't exist). A Python name is a `def`; a vitest name is the quoted title passed to
-// `it` or `describe`, `%s` placeholders and all.
+// `it` or `describe`, `%s` placeholders and all. Every row names a test from the start, but the
+// tests only have to exist once the plan is Done: during /implement they're still being written.
 const TEST_REFERENCE = /`([\w./-]+\.(?:py|tsx?|mjs))::([^`]+)`/g;
+
+export function isDone(plan) {
+  return /^Status: \*\*Done\*\*/m.test(plan);
+}
 
 function definesTest(source, file, name) {
   if (source === null) return false;
@@ -181,13 +186,16 @@ test("every plan's coverage table names tests that exist", () => {
   const plans = readdirSync("docs/plans").filter((file) => /^PLAN_.*\.md$/.test(file));
 
   for (const plan of plans) {
-    const { unknown, unnamed } = planCoverage(
-      readFileSync(`docs/plans/${plan}`, "utf8"),
-      readIfExists,
-    );
-    assert.deepEqual(unknown, [], `${plan}: these test references match no test.`);
+    const text = readFileSync(`docs/plans/${plan}`, "utf8");
+    const { unknown, unnamed } = planCoverage(text, readIfExists);
     assert.deepEqual(unnamed, [], `${plan}: name a test as \`path::test name\` in these rows.`);
+    if (isDone(text)) assert.deepEqual(unknown, [], `${plan}: these references match no test.`);
   }
+});
+
+test("isDone reads the plan's status line", () => {
+  assert.equal(isDone("# Plan: X\n\nStatus: **Done** <!-- ... -->\n"), true);
+  assert.equal(isDone("# Plan: X\n\nStatus: **In progress** <!-- Done -->\n"), false);
 });
 
 test("planCoverage catches a row without a test and a reference to a missing test", () => {
