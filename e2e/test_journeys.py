@@ -1,14 +1,16 @@
 """Outside (black-box) journeys: only what the user sees."""
 
 import re
+import uuid
 from collections.abc import Iterator
 from typing import Literal
 from urllib.parse import urlsplit
 
 import pytest
-from playwright.sync_api import Browser, Dialog, Page, expect
+from playwright.sync_api import Browser, Dialog, Page, Route, expect
 
 from e2e.app import (
+    PHONE,
     api,
     back_to_home,
     create_group,
@@ -23,8 +25,10 @@ from e2e.app import (
     register_and_sign_in,
     search_groups,
     section,
+    sideways_overflow,
     sign_in,
     sign_out,
+    small_targets,
     unique_group_name,
     unique_user_id,
 )
@@ -371,3 +375,75 @@ def test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow(page: Pa
     assert panel["y"] + panel["height"] <= sign_in_box["y"], (panel, sign_in_box)
     expect(form(page, "Sign in")).to_be_visible()
     expect(form(page, "Register")).to_be_visible()
+
+
+def _long_group_name() -> str:
+    # 60 characters, no spaces: the longest name a group can have, and the hardest to wrap.
+    return f"Goa{uuid.uuid4().hex}{uuid.uuid4().hex}"[:60]
+
+
+def test_no_screen_scrolls_sideways_on_a_phone(page: Page) -> None:
+    page.set_viewport_size(PHONE)
+    name = _long_group_name()
+    load_signed_out(page)
+    assert sideways_overflow(page) == 0
+
+    register_and_sign_in(page, unique_user_id("ada"), "A" * 50)
+    create_group(page, name, "x" * 200)
+    assert sideways_overflow(page) == 0
+
+    open_group(page, "My groups", name)
+    expect(section(page, "Members")).to_contain_text("A" * 50)
+    assert sideways_overflow(page) == 0
+
+    load(page, "/nowhere")
+    expect(page.get_by_role("heading", name="Page not found")).to_be_visible()
+    assert sideways_overflow(page) == 0
+
+
+def test_buttons_and_links_are_easy_to_tap_on_a_phone(page: Page) -> None:
+    page.set_viewport_size(PHONE)
+    name = unique_group_name("Goa")
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    create_group(page, name, "Beach week")
+    assert small_targets(page) == []
+
+    open_group(page, "My groups", name)
+    assert small_targets(page) == []
+
+
+def test_reduced_motion_stops_animation(page: Page) -> None:
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    page.emulate_media(reduced_motion="reduce")
+    held: list[Route] = []
+
+    # Hold my groups unanswered, so its loading skeleton stays on screen to inspect.
+    # Playwright tags its handlers, so this has to be a plain function, not list.append.
+    def hold(route: Route) -> None:
+        held.append(route)
+
+    page.route("**/api/me/groups", hold)
+
+    load(page)
+    skeleton = section(page, "My groups").locator(".skeleton").first
+    expect(skeleton).to_be_visible()
+    expect(skeleton).to_have_css("animation-name", "none")
+    expect(page.get_by_role("button", name="New group", exact=True)).to_have_css(
+        "transition-duration", "0s"
+    )
+
+    assert len(held) == 1, "my groups was never requested"
+    with page.expect_response(api("GET", "/api/me/groups")):
+        held[0].continue_()
+    expect(skeleton).to_have_count(0)
+
+
+def test_text_shows_in_a_system_font_when_the_web_font_fails(page: Page) -> None:
+    page.route("**/*.woff2", lambda route: route.abort())
+
+    load_signed_out(page)
+
+    sign_in_form = form(page, "Sign in")
+    expect(sign_in_form.get_by_role("heading", name="Sign in")).to_be_visible()
+    expect(sign_in_form.get_by_label("User ID")).to_be_visible()
+    expect(sign_in_form.get_by_role("button", name="Sign in")).to_be_visible()

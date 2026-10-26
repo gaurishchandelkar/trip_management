@@ -60,12 +60,17 @@ Error bodies are fixed strings and never echo the input.
 
 ## Frontend
 
-- On load it checks the session (`GET /api/me`) and shows "Loading…" until it knows.
-- Signed out: a **Sign in** form (User ID, Password, with the note "Passwords aren't checked yet.") and a **Register** form (User ID, Display name).
-- Signed in: the display name, a **Sign out** button, **My groups**, a **Create group** form, a **Request to join** form (by group name), and **Browse groups** with a search box and a **Request to join** button per group.
-- Opening a group shows its details; members see the member list, and the owner also sees pending requests with **Approve** and **Reject** buttons.
-- Forms check input before sending and show their own messages. User-supplied text is only ever rendered as text.
-- A `401` returns the app to the sign-in screen. Other failures show "Something went wrong, please try again."
+The app is branded **Caravan** ("Plan trips together."). Its design spec is `docs/specs/app-shell-and-design-system.md`.
+
+- **Shell:** every screen has a banner with the Caravan logo and name, which links home and is the page's only `h1`. Signed in, the banner also shows an initials avatar, "Signed in as {display name}" and **Sign out**. The first Tab reaches **Skip to content**. The browser tab reads "{screen} · Caravan".
+- **Addresses:** `/` is home, `/groups/{group_id}` is a group, and anything else is **Page not found**. A group ID that isn't a positive whole number is not found, with no API call. Refresh, Back and shared links work.
+- On load the app checks the session (`GET /api/me`) and shows loading placeholders until it knows.
+- **Signed out:** at any address, a welcome panel beside (960 px and wider) or above the **Sign in** form (User ID, Password, with the note "Passwords aren't checked yet.") and the **Register** form (User ID, Display name). Both forms are always visible. After signing in, the member lands on the address they asked for.
+- **Home:** the title "Groups" with **New group** and **Join by name** buttons, **My groups** and **Browse groups** as cards with status badges, and a search box. **New group** and **Join by name** open modal dialogs with the **Create group** and **Request to join** forms. On success the dialog closes and Home shows the result. On failure it stays open with the typed text. Empty lists say so, with one action: **New group**, or **Clear search** after a search found nothing.
+- **Group:** a **Back to groups** link, then the group's details and the member's status. Members see the member list, and the owner also sees pending requests with **Approve** and **Reject**.
+- Forms show each field's rule up front, check input before sending, mark a failed field invalid and show their own messages. A button is disabled while its request is in flight, so a double click sends one request. User-supplied text is only ever rendered as text.
+- A `401` returns the app to the sign-in screen at the same address. An explicit sign-out returns home. Other failures show "Something went wrong, please try again."
+- **Appearance:** light and dark themes follow the system setting, motion stops under reduced motion, and the Inter font is bundled with a system fallback. Every text colour pair meets WCAG AA contrast (`frontend/src/theme/tokens.test.ts`). No screen scrolls sideways at 360 px, and buttons and links are at least 44 px tall on phones.
 
 ## Storage
 
@@ -73,4 +78,4 @@ SQLite through SQLAlchemy 2.x, in the file named by `TRIP_DB_PATH` (default `tri
 
 ## Not in scope
 
-Trips (itineraries, expenses), real passwords, invitations, leaving or removing members, editing or deleting groups, notifications, deployment.
+Trips (itineraries, expenses), real passwords, invitations, leaving or removing members, editing or deleting groups, notifications, deployment, a manual theme switch.

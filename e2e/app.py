@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from urllib.parse import urlsplit
 
-from playwright.sync_api import Locator, Page, Response, expect
+from playwright.sync_api import Locator, Page, Response, ViewportSize, expect
 
 
 def unique_user_id(prefix: str) -> str:
@@ -133,3 +133,29 @@ def back_to_home(page: Page) -> None:
 def sign_out(page: Page) -> None:
     with page.expect_response(api("POST", "/api/sign-out")):
         page.get_by_role("button", name="Sign out").click()
+
+
+PHONE: ViewportSize = {"width": 360, "height": 740}
+
+
+def sideways_overflow(page: Page) -> int:
+    """How many pixels the page is wider than the viewport: 0 when nothing scrolls sideways."""
+    return page.evaluate(
+        "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+    )
+
+
+def small_targets(page: Page, minimum: int = 44) -> list[str]:
+    """Visible buttons and links shorter than the minimum touch target, for the failure message."""
+    return page.evaluate(
+        """(minimum) => [...document.querySelectorAll("button, a")]
+            .filter((element) => {
+              const box = element.getBoundingClientRect();
+              return box.width > 0 && box.height > 0 && box.height < minimum;
+            })
+            .map((element) => {
+              const height = element.getBoundingClientRect().height;
+              return `${element.textContent.trim()} (${height}px)`;
+            })""",
+        minimum,
+    )

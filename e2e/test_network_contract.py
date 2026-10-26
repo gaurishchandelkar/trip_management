@@ -10,6 +10,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from e2e.app import (
+    PHONE,
     api,
     back_to_home,
     create_group,
@@ -530,6 +531,38 @@ def test_resizing_the_signed_out_screen_makes_no_calls(page: Page, traffic: ApiT
 
     page.set_viewport_size({"width": 360, "height": 740})
     expect(page.get_by_role("region", name="Plan trips together.")).to_be_visible()
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls] == [ME], traffic.describe()
+
+
+@covers(
+    "test_no_screen_scrolls_sideways_on_a_phone",
+    "test_buttons_and_links_are_easy_to_tap_on_a_phone",
+)
+def test_a_phone_screen_makes_the_same_calls(page: Page, traffic: ApiTraffic) -> None:
+    page.set_viewport_size(PHONE)
+    register_and_sign_in(page, unique_user_id("ada"), "Ada")
+    before = len(traffic.api_calls())
+
+    create_group(page, unique_group_name("Goa"))
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls[:before]] == [ME, REGISTER, SIGN_IN, *HOME], (
+        traffic.describe()
+    )
+    assert [call.signature for call in calls[before:]] == [CREATE, MY_GROUPS], traffic.describe()
+
+
+@covers(
+    "test_reduced_motion_stops_animation",
+    "test_text_shows_in_a_system_font_when_the_web_font_fails",
+)
+def test_motion_and_font_preferences_make_no_calls(page: Page, traffic: ApiTraffic) -> None:
+    page.emulate_media(reduced_motion="reduce")
+    page.route("**/*.woff2", lambda route: route.abort())
+
+    load_signed_out(page)
 
     calls = traffic.api_calls()
     assert [call.signature for call in calls] == [ME], traffic.describe()

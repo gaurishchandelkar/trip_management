@@ -1,6 +1,6 @@
 # Spec: App shell and design system
 
-> Status: **ready for planning**. Decisions D1–D4 are recorded at the end. Phase 0 of the product roadmap: make the existing members-and-groups app look and behave like a professional product without changing what it does or how it talks to the backend.
+> Status: **implemented** (`docs/plans/PLAN_app-shell-and-design-system.md`). Decisions D1–D4 are recorded at the end. Phase 0 of the product roadmap: make the existing members-and-groups app look and behave like a professional product without changing what it does or how it talks to the backend.
 
 ## Expected outcome
 

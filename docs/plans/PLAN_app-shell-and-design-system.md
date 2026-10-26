@@ -1,7 +1,7 @@
 # Plan: App shell and design system
 
 Spec: `docs/specs/app-shell-and-design-system.md`
-Status: **In progress** <!-- Awaiting approval | Approved | In progress | Done -->
+Status: **Done** <!-- Awaiting approval | Approved | In progress | Done -->
 Approved: 2026-10-26 by the repo owner, in conversation.
 
 ## Approach
@@ -175,22 +175,27 @@ Success criteria:
   - `docs/STATUS.md`
   - `docs/TECH_STACK.md`: the two dependencies and why there's no UI kit or data library
 
+Notes from implementation:
+- The touch-target test failed first (8 targets under 44 px, such as the skip link at 40 px and group-name links at 25 px). It passed after a `max-width: 639px` rule gave buttons, fields and navigation links a 44 px minimum height. The sideways-scroll test passed with no change: `overflow-wrap: anywhere` from Phase 1 already wraps long names.
+- The four phone, motion and font journeys are paired with two inside tests: a phone screen makes the same sign-in and create calls, and the motion and font preferences make no calls.
+- Keyboard check of the native dialog: Shift+Tab from the first field leaves the page for the browser's own UI, and the next Tab returns to that field. Nothing behind the modal is reachable, which is native `<dialog>` behaviour.
+
 Success criteria:
-- [ ] E2E outside: at 360 × 740, `document.documentElement.scrollWidth <= clientWidth` on the signed-out screen, on Home with a 60-character group name with no spaces and a 200-character description, on that group's screen with a 50-character display name, and on Page not found
-- [ ] E2E outside: at 360 px, every visible button and link in Home and the group screen is at least 44 px tall
-- [ ] E2E outside: with `reduced_motion="reduce"`, a held `GET /api/me/groups` shows a skeleton whose computed `animation-name` is `none`, and a button's `transition-duration` is `0s`
-- [ ] E2E outside: with every `*.woff2` request aborted, the sign-in heading and labels are still visible (system font fallback)
-- [ ] `vite build` output: total JS is at most 150 KB gzipped (the figure goes in the PR)
-- [ ] Playwright MCP network panel: the font files fetched for an English screen total at most 100 KB
-- [ ] Playwright MCP: every screen checked in light and dark at 360 px and 1280 px, with screenshots attached to the PR. Dialogs are checked by keyboard only
-- [ ] `docs/SPEC.md`, `docs/STATUS.md` and `docs/TECH_STACK.md` are updated
-- [ ] `npm run check` passes
+- [x] E2E outside: `test_no_screen_scrolls_sideways_on_a_phone` checks the signed-out screen, Home with a 60-character group name with no spaces and a 200-character description, that group with a 50-character display name, and Page not found
+- [x] E2E outside: `test_buttons_and_links_are_easy_to_tap_on_a_phone` (Home and group screen, every visible button and link at least 44 px)
+- [x] E2E outside: `test_reduced_motion_stops_animation` (held `GET /api/me/groups`, skeleton `animation-name: none`, button `transition-duration: 0s`)
+- [x] E2E outside: `test_text_shows_in_a_system_font_when_the_web_font_fails`
+- [x] `vite build` output: JS is **87.02 KB** gzipped (276.81 KB raw), against a 150 KB budget. CSS is 3.71 KB gzipped
+- [x] Playwright MCP: an English screen fetches only `inter-latin-wght-normal.woff2`, which is **48.25 KB** in the build, against a 100 KB budget
+- [x] Playwright MCP: every screen checked in light and dark, at 360 px and 1280 px (screenshots in `.playwright-mcp/`, git-ignored, for the PR). The New group dialog was opened, used and closed by keyboard only, with focus returning to **New group**
+- [x] `docs/SPEC.md`, `docs/STATUS.md` and `docs/TECH_STACK.md` are updated
+- [x] `npm run check` passes
 
 ## Final verification
 
-- [ ] `npm run check` passes
-- [ ] Every acceptance criterion in the spec is covered by a test (mapping below)
-- [ ] Every existing inside test passes with its call assertions unchanged (`git diff main -- e2e/test_network_contract.py` shows only added tests and updated selectors)
+- [x] `npm run check` passes: build, lint, unit (188 vitest, 61 pytest), integration (102), functional (59 E2E), security and architecture
+- [x] Every acceptance criterion in the spec is covered by a test (mapping below)
+- [x] Every existing inside test passes with its call assertions unchanged. `git diff main -- e2e/test_network_contract.py` removes only one `@covers` line (extended with a name) and five selectors (link instead of button, dialog opened first, page-level status)
 
 ### Spec coverage
 
