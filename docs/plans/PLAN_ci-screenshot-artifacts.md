@@ -137,15 +137,19 @@ Success criteria:
 - [x] The new `harness-config` tests pass (14/14): `the functional job uploads the UI screenshots on every run`, `jobSteps reads only the named job's steps`, `the PR template tells reviewers where the UI screenshots are`
 - [x] Negative proof: removing `if: always()` from the upload step failed only the CI config test, with "The ui-screenshots upload needs `if: always()`." Reverted
 - [x] `npm run check` passes (see Final verification)
-- [ ] **After you push the branch:** `gh run view <id>` shows a `ui-screenshots` artifact on the PR's run. Downloaded, it has 20 PNGs and is at most 5 MB. `gh api .../artifacts` shows it expires 14 days after the run
-- [ ] **After you push the branch:** the functional job's summary on that run shows the "UI screenshots" section with all 20 present
+- [x] **After you push the branch:** PR #5's run [40383285851](https://github.com/gaurishchandelkar/trip_management/actions/runs/40383285851) passed all 7 jobs and has a `ui-screenshots` artifact:
+  - 861,613 bytes zipped; downloaded, it holds 20 PNGs totalling 952 KB, against the 5 MB budget
+  - created 2026-10-26 19:10 and expiring 2026-11-09 19:10 UTC, exactly 14 days later (`gh api .../artifacts`)
+  - the Linux runner's images match the local ones in content: the Inter font, the theme, and the fixed data
+- [x] **After you push the branch:** the functional job's summary step ("Run node scripts/screenshot-summary.mjs …") succeeded. It exits 0 only when exactly the 20 expected files are present, and the same script run on the downloaded artifact prints "20 of 20". The failure-only `playwright-report` upload was skipped, as it should be on a passing run.
+  - Not checked by the agent: the rendered summary page itself. GitHub has no API for job summaries, and the repo is private, so its page needs a signed-in browser. You can confirm it on the run page above.
 - [x] `docs/SPEC.md`, `docs/STATUS.md`, `docs/PROCESS.md` and `docs/HARNESS_LOG.md` are updated
 
 ## Final verification
 
 - [x] `npm run check` passes
 - [x] Every acceptance criterion in the spec is covered by a test (table below). With Status **Done**, `scripts/harness-config.test.mjs` confirms that every name in the table matches a test
-- [ ] The two CI-run criteria in Phase 3 are checked on the PR's first run, during `/ship`
+- [x] The two CI-run criteria in Phase 3 are checked on PR #5's first run, during `/ship`
 
 ### Spec coverage
 

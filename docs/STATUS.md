@@ -27,7 +27,7 @@
 
 ## In progress
 
-- **CI screenshot artifacts** (`docs/plans/PLAN_ci-screenshot-artifacts.md`) is implemented on branch `feat/ci-screenshot-artifacts`. The upload and job summary still need checking on the PR's first CI run, then `/ship`.
+- **CI screenshot artifacts** (`docs/plans/PLAN_ci-screenshot-artifacts.md`) is in review as PR #5. Its first CI run passed and published `ui-screenshots` with all 20 images.
 
 ## Known gaps
 
