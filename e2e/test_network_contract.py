@@ -371,3 +371,13 @@ def test_markup_display_name_is_refused_before_any_request(page: Page, traffic: 
 
     calls = traffic.api_calls()
     assert [call.signature for call in calls] == [ME], traffic.describe()
+
+
+@covers("test_theme_follows_the_system_colour_scheme")
+def test_dark_theme_needs_no_api_calls(page: Page, traffic: ApiTraffic) -> None:
+    page.emulate_media(color_scheme="dark")
+
+    load_signed_out(page)
+
+    calls = traffic.api_calls()
+    assert [call.signature for call in calls] == [ME], traffic.describe()

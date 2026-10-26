@@ -409,6 +409,127 @@ describe("group detail", () => {
   });
 });
 
+describe("while a request is in flight", () => {
+  // A request that never answers, so the button stays busy for the second click.
+  const inFlight = () => new Promise<never>(() => undefined);
+
+  it("sends one create for a double click", async () => {
+    vi.mocked(createGroup).mockReturnValue(inFlight());
+    await renderGroups();
+    await userEvent.type(within(form("Create group")).getByLabelText("Name"), "Goa");
+
+    await userEvent.dblClick(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    );
+
+    expect(createGroup).toHaveBeenCalledTimes(1);
+    expect(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    ).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("sends one request by name for a double click", async () => {
+    vi.mocked(requestToJoinByName).mockReturnValue(inFlight());
+    await renderGroups();
+    await userEvent.type(within(form("Request to join")).getByLabelText("Group name"), "Goa");
+
+    await userEvent.dblClick(
+      within(form("Request to join")).getByRole("button", { name: "Send request" }),
+    );
+
+    expect(requestToJoinByName).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends one request from the list for a double click", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group()]);
+    vi.mocked(requestToJoin).mockReturnValue(inFlight());
+    render(<Groups onSignedOut={onSignedOut} />);
+
+    await userEvent.dblClick(
+      await screen.findByRole("button", { name: "Request to join Goa 2027" }),
+    );
+
+    expect(requestToJoin).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Request to join Goa 2027" })).toBeDisabled();
+  });
+
+  it("sends one decision for a double click, and holds both buttons", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "owner" })]);
+    vi.mocked(getGroup).mockResolvedValue(
+      detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }),
+    );
+    vi.mocked(approve).mockReturnValue(inFlight());
+    render(<Groups onSignedOut={onSignedOut} />);
+    await userEvent.click(
+      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+    );
+
+    await userEvent.dblClick(await screen.findByRole("button", { name: "Approve Bob" }));
+
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Reject Bob" })).toBeDisabled();
+  });
+});
+
+describe("marking invalid fields", () => {
+  it("marks the group name invalid when its check fails", async () => {
+    await renderGroups();
+    const name = within(form("Create group")).getByLabelText("Name");
+
+    await userEvent.type(name, "Goa_2027");
+    await userEvent.click(
+      within(form("Create group")).getByRole("button", { name: "Create group" }),
+    );
+
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(name).toHaveAccessibleDescription(/^Up to 60 letters/);
+  });
+
+  it("marks the search term invalid when its check fails", async () => {
+    await renderGroups();
+    const search = screen.getByLabelText("Search by name");
+
+    await userEvent.type(search, "100%");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(search).toHaveAttribute("aria-invalid", "true");
+  });
+});
+
+describe("status badges", () => {
+  it("shows the member's status on the group screen", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "member" })]);
+    vi.mocked(getGroup).mockResolvedValue(detail({ my_status: "member", members: [] }));
+    render(<Groups onSignedOut={onSignedOut} />);
+
+    await userEvent.click(
+      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+    );
+
+    expect(await screen.findByText("You're a member")).toHaveClass("badge--member");
+  });
+
+  it("shows an avatar beside each member and requester", async () => {
+    vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "owner" })]);
+    vi.mocked(getGroup).mockResolvedValue(
+      detail({
+        members: [{ display_name: "Ada Lovelace" }],
+        pending_requests: [{ request_id: 7, display_name: "Bob" }],
+      }),
+    );
+    render(<Groups onSignedOut={onSignedOut} />);
+
+    await userEvent.click(
+      await within(section("Browse groups")).findByRole("button", { name: "Goa 2027" }),
+    );
+
+    expect(await within(section("Members")).findByText("AL")).toHaveClass("avatar");
+    expect(within(section("Pending requests")).getByText("B")).toHaveClass("avatar");
+    expect(screen.getByRole("button", { name: "Approve Bob" })).toHaveClass("button--primary");
+    expect(screen.getByRole("button", { name: "Reject Bob" })).toHaveClass("button--danger");
+  });
+});
+
 describe("rendering untrusted text", () => {
   it("shows group names, descriptions and display names with markup as text", async () => {
     const markup = "<img src=x onerror=alert(1)>";

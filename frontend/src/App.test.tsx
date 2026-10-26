@@ -211,6 +211,40 @@ describe("signing in and out", () => {
   });
 });
 
+describe("marking invalid fields", () => {
+  it.each([
+    ["1ada", "Ada", "User ID"],
+    ["ada", "R2D2", "Display name"],
+  ])("register marks %s / %s as invalid on the %s field", async (userId, displayName, field) => {
+    await renderSignedOut();
+
+    await fillRegister(userId, displayName);
+
+    expect(within(registerForm()).getByLabelText(field)).toHaveAttribute("aria-invalid", "true");
+    const other = field === "User ID" ? "Display name" : "User ID";
+    expect(within(registerForm()).getByLabelText(other)).not.toHaveAttribute("aria-invalid");
+  });
+
+  it.each([
+    ["1ada", "x", "User ID"],
+    ["ada", "", "Password"],
+  ])("sign-in marks %s / %j as invalid on the %s field", async (userId, password, field) => {
+    await renderSignedOut();
+
+    await fillSignIn(userId, password);
+
+    expect(within(signInForm()).getByLabelText(field)).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("shows each register rule before the member fails it", async () => {
+    await renderSignedOut();
+
+    expect(within(registerForm()).getByLabelText("User ID")).toHaveAccessibleDescription(
+      "3–30 letters, digits, - or _, starting with a letter.",
+    );
+  });
+});
+
 describe("rendering untrusted text", () => {
   it("shows a display name containing markup as literal text", async () => {
     const markup = "<img src=x onerror=alert(1)>";

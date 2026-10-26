@@ -1,4 +1,5 @@
 import { ConflictError, type ConflictReason } from "./api";
+import { Icon } from "./ui/Icon";
 
 export const UNAVAILABLE = "Something went wrong, please try again.";
 
@@ -14,7 +15,12 @@ export function status(text: string): Feedback {
 
 export function FeedbackMessage({ feedback }: { feedback: Feedback }) {
   if (feedback === null) return null;
-  return <p role={feedback.kind}>{feedback.text}</p>;
+  return (
+    <p role={feedback.kind} className={`callout callout--${feedback.kind}`}>
+      <Icon name={feedback.kind === "alert" ? "alert" : "check"} />
+      <span>{feedback.text}</span>
+    </p>
+  );
 }
 
 const CONFLICT_MESSAGES: Record<ConflictReason, string> = {

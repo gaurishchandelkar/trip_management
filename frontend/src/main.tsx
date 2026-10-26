@@ -1,8 +1,13 @@
+import "@fontsource-variable/inter";
+import "./theme/tokens.css";
+import "./theme/base.css";
+import "./ui/ui.css";
+import "./theme/layout.css";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
-import "./styles.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");

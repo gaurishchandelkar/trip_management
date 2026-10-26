@@ -4,6 +4,9 @@ import { getMe, type Member, SignedOutError, signOut } from "./api";
 import { alert, type Feedback, FeedbackMessage, UNAVAILABLE } from "./Feedback";
 import { Groups } from "./Groups";
 import { SignedOut } from "./SignedOut";
+import { Avatar } from "./ui/Avatar";
+import { Button } from "./ui/Button";
+import { Skeleton } from "./ui/Skeleton";
 
 type Session =
   | { status: "loading" }
@@ -13,26 +16,31 @@ type Session =
 
 function SignedIn({ member, onSignedOut }: { member: Member; onSignedOut: () => void }) {
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [busy, setBusy] = useState(false);
 
   return (
     <>
-      <header>
-        <p>
+      <header className="session">
+        <Avatar name={member.display_name} />
+        <p className="session__name">
           Signed in as <strong>{member.display_name}</strong>
         </p>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          busy={busy}
           onClick={() => {
+            setBusy(true);
             signOut()
               .then(onSignedOut)
               .catch((error: unknown) => {
+                setBusy(false);
                 if (error instanceof SignedOutError) onSignedOut();
                 else setFeedback(alert(UNAVAILABLE));
               });
           }}
         >
           Sign out
-        </button>
+        </Button>
       </header>
       <FeedbackMessage feedback={feedback} />
       <Groups onSignedOut={onSignedOut} />
@@ -61,10 +69,10 @@ export function App() {
   }, []);
 
   return (
-    <main>
-      <h1>Trip Management</h1>
-      {session.status === "loading" && <p>Loading…</p>}
-      {session.status === "unavailable" && <p role="alert">{UNAVAILABLE}</p>}
+    <main className="app">
+      <h1 className="app__title">Trip Management</h1>
+      {session.status === "loading" && <Skeleton rows={2} />}
+      {session.status === "unavailable" && <FeedbackMessage feedback={alert(UNAVAILABLE)} />}
       {session.status === "signed-out" && (
         <SignedOut
           onSignedIn={(member) => {

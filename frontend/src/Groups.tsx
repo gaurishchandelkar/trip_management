@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import {
   browseGroups,
@@ -13,6 +13,11 @@ import {
 } from "./api";
 import { alert, type Feedback, FeedbackMessage, messageFor, status } from "./Feedback";
 import { GroupView } from "./GroupView";
+import { StatusBadge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Field } from "./ui/Field";
+import { Icon } from "./ui/Icon";
+import { Skeleton } from "./ui/Skeleton";
 import {
   DESCRIPTION_MAX_LENGTH,
   GROUP_NAME_HINT,
@@ -25,30 +30,44 @@ export interface GroupsProps {
   onSignedOut: () => void;
 }
 
-const STATUS_TEXT: Record<Group["my_status"], string> = {
-  owner: "You own this group",
-  member: "You're a member",
-  pending: "Request pending",
-  none: "",
-};
+const GROUP_NAME_RULE =
+  "Up to 60 letters, digits, spaces and - ' & . , starting with a letter or digit.";
 
-function GroupLine({ group, onOpen }: { group: Group; onOpen: (groupId: number) => void }) {
+function GroupCard({
+  group,
+  onOpen,
+  action,
+}: {
+  group: Group;
+  onOpen: (groupId: number) => void;
+  action?: ReactNode;
+}) {
   return (
-    <>
-      <button
-        type="button"
-        className="link"
-        onClick={() => {
-          onOpen(group.group_id);
-        }}
-      >
-        {group.name}
-      </button>{" "}
-      <span>
-        by {group.owner_display_name}, {group.member_count}{" "}
-        {group.member_count === 1 ? "member" : "members"}
-      </span>
-    </>
+    <li className="card group-card">
+      <div className="group-card__head">
+        <button
+          type="button"
+          className="link-button group-card__name"
+          onClick={() => {
+            onOpen(group.group_id);
+          }}
+        >
+          {group.name}
+        </button>
+        <StatusBadge status={group.my_status} />
+      </div>
+      {group.description && <p className="group-card__description">{group.description}</p>}
+      <div className="group-card__foot">
+        <p className="meta">
+          <Icon name="users" />
+          <span>
+            by {group.owner_display_name}, {group.member_count}{" "}
+            {group.member_count === 1 ? "member" : "members"}
+          </span>
+        </p>
+        {action}
+      </div>
+    </li>
   );
 }
 
@@ -60,17 +79,14 @@ function MyGroups({
   onOpen: (groupId: number) => void;
 }) {
   return (
-    <section aria-labelledby="my-groups-heading">
+    <section className="home__section" aria-labelledby="my-groups-heading">
       <h2 id="my-groups-heading">My groups</h2>
-      {groups === null && <p>Loading…</p>}
-      {groups?.length === 0 && <p>You aren&apos;t in any groups yet.</p>}
+      {groups === null && <Skeleton rows={2} />}
+      {groups?.length === 0 && <p className="empty-state">You aren&apos;t in any groups yet.</p>}
       {groups !== null && groups.length > 0 && (
-        <ul>
+        <ul className="card-grid">
           {groups.map((group) => (
-            <li key={group.group_id}>
-              <GroupLine group={group} onOpen={onOpen} />{" "}
-              <span>{STATUS_TEXT[group.my_status]}</span>
-            </li>
+            <GroupCard key={group.group_id} group={group} onOpen={onOpen} />
           ))}
         </ul>
       )}
@@ -82,13 +98,18 @@ function CreateGroupForm({ onCreated, onSignedOut }: { onCreated: () => void } &
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [invalid, setInvalid] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   function submit() {
     const trimmed = name.trim();
     if (!isValidGroupName(trimmed)) {
+      setInvalid(true);
       setFeedback(alert(GROUP_NAME_HINT));
       return;
     }
+    setInvalid(false);
+    setBusy(true);
     createGroup(trimmed, description.trim())
       .then((group) => {
         setName("");
@@ -100,11 +121,15 @@ function CreateGroupForm({ onCreated, onSignedOut }: { onCreated: () => void } &
         if (error instanceof SignedOutError) onSignedOut();
         else if (error instanceof InvalidInputError) setFeedback(alert(GROUP_NAME_HINT));
         else setFeedback(alert(messageFor(error)));
+      })
+      .finally(() => {
+        setBusy(false);
       });
   }
 
   return (
     <form
+      className="card form"
       aria-labelledby="create-group-heading"
       onSubmit={(event) => {
         event.preventDefault();
@@ -112,25 +137,30 @@ function CreateGroupForm({ onCreated, onSignedOut }: { onCreated: () => void } &
       }}
     >
       <h2 id="create-group-heading">Create group</h2>
-      <label htmlFor="group-name">Name</label>
-      <input
+      <Field
         id="group-name"
+        label="Name"
+        hint={GROUP_NAME_RULE}
+        invalid={invalid}
         value={name}
         maxLength={GROUP_NAME_MAX_LENGTH}
         onChange={(event) => {
           setName(event.target.value);
         }}
       />
-      <label htmlFor="group-description">Description</label>
-      <input
+      <Field
         id="group-description"
+        label="Description"
+        hint="Optional, up to 200 characters."
         value={description}
         maxLength={DESCRIPTION_MAX_LENGTH}
         onChange={(event) => {
           setDescription(event.target.value);
         }}
       />
-      <button type="submit">Create group</button>
+      <Button type="submit" variant="primary" busy={busy}>
+        Create group
+      </Button>
       <FeedbackMessage feedback={feedback} />
     </form>
   );
@@ -142,13 +172,18 @@ function RequestByNameForm({
 }: { onRequested: (groupId: number) => void } & GroupsProps) {
   const [name, setName] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [invalid, setInvalid] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   function submit() {
     const trimmed = name.trim();
     if (!isValidGroupName(trimmed)) {
+      setInvalid(true);
       setFeedback(alert(GROUP_NAME_HINT));
       return;
     }
+    setInvalid(false);
+    setBusy(true);
     requestToJoinByName(trimmed)
       .then((request) => {
         setName("");
@@ -160,11 +195,15 @@ function RequestByNameForm({
         else if (error instanceof NotFoundError) setFeedback(alert("No group has that name."));
         else if (error instanceof InvalidInputError) setFeedback(alert(GROUP_NAME_HINT));
         else setFeedback(alert(messageFor(error)));
+      })
+      .finally(() => {
+        setBusy(false);
       });
   }
 
   return (
     <form
+      className="card form"
       aria-labelledby="request-heading"
       onSubmit={(event) => {
         event.preventDefault();
@@ -172,16 +211,20 @@ function RequestByNameForm({
       }}
     >
       <h2 id="request-heading">Request to join</h2>
-      <label htmlFor="request-group-name">Group name</label>
-      <input
+      <Field
         id="request-group-name"
+        label="Group name"
+        hint="The group's exact name. Its owner decides."
+        invalid={invalid}
         value={name}
         maxLength={GROUP_NAME_MAX_LENGTH}
         onChange={(event) => {
           setName(event.target.value);
         }}
       />
-      <button type="submit">Send request</button>
+      <Button type="submit" busy={busy}>
+        Send request
+      </Button>
       <FeedbackMessage feedback={feedback} />
     </form>
   );
@@ -192,59 +235,72 @@ function BrowseGroups({
   onSearch,
   onRequest,
   onOpen,
+  requesting,
+  invalidSearch,
   feedback,
 }: {
   groups: Group[] | null;
   onSearch: (search: string) => void;
   onRequest: (group: Group) => void;
   onOpen: (groupId: number) => void;
+  /** The group whose join request is in flight. */
+  requesting: number | null;
+  invalidSearch: boolean;
   feedback: Feedback;
 }) {
   const [search, setSearch] = useState("");
 
   return (
-    <section aria-labelledby="browse-heading">
+    <section className="home__section" aria-labelledby="browse-heading">
       <h2 id="browse-heading">Browse groups</h2>
       <form
         role="search"
+        className="search"
         onSubmit={(event) => {
           event.preventDefault();
           onSearch(search.trim());
         }}
       >
-        <label htmlFor="browse-search">Search by name</label>
-        <input
+        <Field
           id="browse-search"
+          label="Search by name"
+          invalid={invalidSearch}
           value={search}
           maxLength={GROUP_NAME_MAX_LENGTH}
           onChange={(event) => {
             setSearch(event.target.value);
           }}
         />
-        <button type="submit">Search</button>
+        <Button type="submit">
+          <Icon name="search" />
+          Search
+        </Button>
       </form>
       <FeedbackMessage feedback={feedback} />
-      {groups === null && <p>Loading…</p>}
-      {groups?.length === 0 && <p>No groups found.</p>}
+      {groups === null && <Skeleton />}
+      {groups?.length === 0 && <p className="empty-state">No groups found.</p>}
       {groups !== null && groups.length > 0 && (
-        <ul>
+        <ul className="card-grid">
           {groups.map((group) => (
-            <li key={group.group_id}>
-              <GroupLine group={group} onOpen={onOpen} />{" "}
-              {group.my_status === "none" ? (
-                <button
-                  type="button"
-                  aria-label={`Request to join ${group.name}`}
-                  onClick={() => {
-                    onRequest(group);
-                  }}
-                >
-                  Request to join
-                </button>
-              ) : (
-                <span>{STATUS_TEXT[group.my_status]}</span>
-              )}
-            </li>
+            <GroupCard
+              key={group.group_id}
+              group={group}
+              onOpen={onOpen}
+              action={
+                group.my_status === "none" && (
+                  <Button
+                    variant="primary"
+                    aria-label={`Request to join ${group.name}`}
+                    busy={requesting === group.group_id}
+                    onClick={() => {
+                      onRequest(group);
+                    }}
+                  >
+                    Request to join
+                  </Button>
+                )
+              }
+            />
           ))}
         </ul>
       )}
@@ -256,6 +312,8 @@ export function Groups({ onSignedOut }: GroupsProps) {
   const [myGroups, setMyGroups] = useState<Group[] | null>(null);
   const [browsed, setBrowsed] = useState<Group[] | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [invalidSearch, setInvalidSearch] = useState(false);
+  const [requesting, setRequesting] = useState<number | null>(null);
   const [openGroupId, setOpenGroupId] = useState<number | null>(null);
   // Bumped when returning from a group, so the home lists show what changed there.
   const [visit, setVisit] = useState(0);
@@ -275,9 +333,11 @@ export function Groups({ onSignedOut }: GroupsProps) {
 
   function browse(search: string) {
     if (search !== "" && !isValidGroupName(search)) {
+      setInvalidSearch(true);
       setFeedback(alert(GROUP_NAME_HINT));
       return;
     }
+    setInvalidSearch(false);
     setFeedback(null);
     browseGroups(search || undefined)
       .then(setBrowsed)
@@ -305,28 +365,36 @@ export function Groups({ onSignedOut }: GroupsProps) {
   }
 
   return (
-    <>
+    <div className="home">
       <MyGroups groups={myGroups} onOpen={setOpenGroupId} />
-      <CreateGroupForm
-        onSignedOut={onSignedOut}
-        onCreated={() => {
-          getMyGroups().then(setMyGroups).catch(failed);
-        }}
-      />
-      <RequestByNameForm onRequested={markPending} onSignedOut={onSignedOut} />
+      <div className="home__forms">
+        <CreateGroupForm
+          onSignedOut={onSignedOut}
+          onCreated={() => {
+            getMyGroups().then(setMyGroups).catch(failed);
+          }}
+        />
+        <RequestByNameForm onRequested={markPending} onSignedOut={onSignedOut} />
+      </div>
       <BrowseGroups
         groups={browsed}
         feedback={feedback}
+        requesting={requesting}
+        invalidSearch={invalidSearch}
         onSearch={browse}
         onOpen={setOpenGroupId}
         onRequest={(group) => {
+          setRequesting(group.group_id);
           requestToJoin(group.group_id)
             .then(() => {
               markPending(group.group_id);
             })
-            .catch(failed);
+            .catch(failed)
+            .finally(() => {
+              setRequesting(null);
+            });
         }}
       />
-    </>
+    </div>
   );
 }

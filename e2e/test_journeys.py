@@ -1,6 +1,7 @@
 """Outside (black-box) journeys: only what the user sees."""
 
 from collections.abc import Iterator
+from typing import Literal
 
 import pytest
 from playwright.sync_api import Browser, Dialog, Page, expect
@@ -197,3 +198,21 @@ def test_taken_group_name_says_so(page: Page) -> None:
         create_form.get_by_role("button", name="Create group").click()
 
     expect(create_form.get_by_role("alert")).to_have_text("That group name is already taken.")
+
+
+@pytest.mark.parametrize(
+    ("scheme", "background", "text"),
+    [
+        ("light", "rgb(248, 250, 252)", "rgb(15, 23, 42)"),
+        ("dark", "rgb(15, 23, 42)", "rgb(241, 245, 249)"),
+    ],
+)
+def test_theme_follows_the_system_colour_scheme(
+    page: Page, scheme: Literal["light", "dark"], background: str, text: str
+) -> None:
+    page.emulate_media(color_scheme=scheme)
+
+    load_signed_out(page)
+
+    expect(page.locator("body")).to_have_css("background-color", background)
+    expect(page.locator("body")).to_have_css("color", text)
