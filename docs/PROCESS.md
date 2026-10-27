@@ -77,7 +77,7 @@ build → lint → unit → integration → functional → security → architec
 
 The pre-commit hook runs the fast stages for staged files. CI runs every stage on every PR.
 
-On every CI run, the functional job uploads the 20 screenshots as the `ui-screenshots` artifact, kept 14 days, and lists them in its job summary. Reviewers see the UI from there, not from screenshots an agent took by hand.
+On every CI run, the functional job uploads the 20 screenshots as the `ui-screenshots` artifact, kept 14 days, and lists them in its job summary. Reviewers see the UI from there, not from screenshots an agent took by hand. For a branch that changes `frontend/` or `e2e/test_screenshots.py`, `npm run pr` also attaches the 20 local captures from `test-results/screenshots/` to the PR, and refuses a partial set or one older than the branch's last UI commit.
 
 ## Small changes outside a plan
 
