@@ -45,7 +45,7 @@ Data lives in `trip.db` in the repo root (git-ignored). Set `TRIP_DB_PATH` to us
 | `npm run check -- lint unit` | Runs only the stages named |
 | `npm run format` | Formats all Python and TypeScript |
 | `npm run metrics` | Reports time to validated outcome, first-pass rate and rework |
-| `npm run pr -- <spec-name>` | Opens a PR for a finished spec, with its title and description |
+| `npm run pr -- <spec-name>` | Opens a PR for a finished spec, with its title and description. A UI change also gets the 20 e2e screenshots |
 
 ## Tech stack
 

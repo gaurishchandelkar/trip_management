@@ -13,6 +13,14 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-27: PR screenshots still came from an agent's browser
+- Signal: harness defect
+- What happened: After CI started capturing the screens, `/ship` still told the agent to take PR screenshots by hand into `.playwright-mcp/pr-<name>/`, and `npm run pr` attached whatever was there. The human found an old hand-taken set in `.playwright-mcp/final-ui/` and asked for the e2e captures instead. Nothing tied hand-taken images to the code in the PR.
+- Improvement: safeguard. `scripts/open-pr.mjs` attaches the 20 captures from `test-results/screenshots/` when the branch changes `frontend/` or `e2e/test_screenshots.py`. It refuses a partial set, or one older than the branch's last UI commit. `/ship` (approved by the human) no longer takes screenshots, and the old hand-taken PNGs were deleted.
+
+  Proof: `scripts/open-pr.test.mjs` covers the UI check, the screen order and alt text, and refusing a partial, padded, empty or stale set. On the real captures, the function gave 20 attachments; with the cutoff set to now, it refused them as stale.
+- Enforced: yes (unit stage, and `npm run pr` refuses to open a UI PR without fresh captures)
+
 ## 2026-10-27: Vitest title checks raced the effect that sets the title
 - Signal: harness defect
 - What happened: PR #5's second CI run failed the unit job on `App.test.tsx > shows the signed-in member beside their avatar`: "expected 'Sign in · Caravan' to be 'Groups · Caravan'". The PR changed no frontend code, and a re-run passed. It's likely the unexplained App.test failure seen once in pre-commit during app-shell-and-design-system. Screens set `document.title` in an effect. Seven tests read it once, right after the screen's content showed, so a slow runner could read it before the effect ran. jsdom also kept the last test's title, so a stale title could even pass a check.

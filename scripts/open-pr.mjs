@@ -3,23 +3,48 @@
 // One short command, because a long `gh pr create` line wraps in a terminal and the break ends up
 // in the PR title, and gh may be installed but missing from Git Bash's PATH
 // (docs/HARNESS_LOG.md, app-shell-and-design-system retro).
-// Screenshots that /ship saved to .playwright-mcp/pr-<spec-name>/ are attached below the body.
+// When the branch changes the UI, the e2e captures (e2e/test_screenshots.py) are attached below
+// the body: the screens the code produces, not screenshots an agent took by hand.
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const SPEC_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const MEDIA = /\.(?:png|jpe?g|gif|webp|mp4)$/i;
+import { EXPECTED, summarize } from "./screenshot-summary.mjs";
 
-/** `--attach` arguments for each image in the folder, in name order, with alt text from the name. */
-export function attachArgs(dir, files) {
-  return files
-    .filter((file) => MEDIA.test(file))
-    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
-    .flatMap((file) => {
-      const alt = file.replace(MEDIA, "").replace(/^\d+-/, "").replaceAll("-", " ");
-      return ["--attach", `${dir}/${file}#${alt}`];
-    });
+const SPEC_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SCREENSHOTS = "test-results/screenshots";
+// Changes that can alter what the captured screens look like.
+const UI_PATHS = ["frontend", "e2e/test_screenshots.py"];
+
+export function changesUi(changedFiles) {
+  return changedFiles.some((file) =>
+    UI_PATHS.some((path) => file === path || file.startsWith(`${path}/`)),
+  );
+}
+
+/**
+ * `--attach` arguments for the 20 captures, in screen order with alt text such as
+ * "sign in, dark, 360 px". Refuses a partial set, or one older than the branch's last UI change.
+ */
+export function screenshotAttachments(dir, files, lastUiChangeMs) {
+  const { missing, unexpected } = summarize(files.map((file) => file.name));
+  if (missing.length > 0 || unexpected.length > 0)
+    return {
+      error: `${dir} doesn't hold exactly the ${String(EXPECTED.length)} captures. Run: npm run check -- functional`,
+    };
+  if (files.some((file) => file.mtimeMs < lastUiChangeMs))
+    return {
+      error: `${dir} is older than this branch's last UI change. Run: npm run check -- functional`,
+    };
+  const args = EXPECTED.flatMap((name) => {
+    const [, screen, theme, width] = /^(.+)-(light|dark)-(\d+)\.png$/.exec(name) ?? [];
+    return ["--attach", `${dir}/${name}#${screen.replaceAll("-", " ")}, ${theme}, ${width} px`];
+  });
+  return { args };
+}
+
+function git(args) {
+  return spawnSync("git", args, { encoding: "utf8" }).stdout.trim();
 }
 
 export function specTitle(spec) {
@@ -58,10 +83,21 @@ function main() {
   if (gh === undefined)
     return fail("GitHub CLI (gh) not found. Install it: https://cli.github.com");
 
-  const screenshots = `.playwright-mcp/pr-${name}`;
-  const attachments = existsSync(screenshots)
-    ? attachArgs(screenshots, readdirSync(screenshots))
-    : [];
+  let attachments = [];
+  if (changesUi(git(["diff", "--name-only", "main...HEAD"]).split("\n"))) {
+    const lastUiChange = Number(
+      git(["log", "-1", "--format=%ct", "main..HEAD", "--", ...UI_PATHS]),
+    );
+    const files = existsSync(SCREENSHOTS)
+      ? readdirSync(SCREENSHOTS).map((file) => ({
+          name: file,
+          mtimeMs: statSync(`${SCREENSHOTS}/${file}`).mtimeMs,
+        }))
+      : [];
+    const { args, error } = screenshotAttachments(SCREENSHOTS, files, lastUiChange * 1000);
+    if (error !== undefined) return fail(error);
+    attachments = args;
+  }
   const args = ["pr", "create", "--title", title, "--body-file", bodyPath, ...attachments];
   const { status } = spawnSync(gh, args, { stdio: "inherit" });
   process.exitCode = status ?? 1;

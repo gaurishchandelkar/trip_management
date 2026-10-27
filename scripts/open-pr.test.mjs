@@ -2,24 +2,41 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { attachArgs, ghCandidates, specTitle } from "./open-pr.mjs";
+import { changesUi, ghCandidates, screenshotAttachments, specTitle } from "./open-pr.mjs";
+import { EXPECTED } from "./screenshot-summary.mjs";
 
-test("attachArgs attaches images in numeric order, with alt text from the name", () => {
-  const files = [
-    "10-not-found-360-light.png",
-    "notes.txt",
-    "2-home-1280-dark.png",
-    "1-sign-in.PNG",
-  ];
+const DIR = "test-results/screenshots";
+const captured = (mtimeMs) => EXPECTED.map((name) => ({ name, mtimeMs }));
 
-  assert.deepEqual(attachArgs(".playwright-mcp/pr-x", files), [
+test("changesUi is true only for frontend code or the screenshot captures", () => {
+  assert.equal(changesUi(["docs/STATUS.md", "frontend/src/App.tsx"]), true);
+  assert.equal(changesUi(["e2e/test_screenshots.py"]), true);
+  assert.equal(changesUi(["README.md", "e2e/test_journeys.py", "frontendish.md", ""]), false);
+});
+
+test("screenshotAttachments attaches the 20 e2e captures in screen order, with alt text", () => {
+  const { args, error } = screenshotAttachments(DIR, captured(2000).reverse(), 1000);
+
+  assert.equal(error, undefined);
+  assert.equal(args.length, 40);
+  assert.deepEqual(args.slice(0, 4), [
     "--attach",
-    ".playwright-mcp/pr-x/1-sign-in.PNG#sign in",
+    `${DIR}/sign-in-light-360.png#sign in, light, 360 px`,
     "--attach",
-    ".playwright-mcp/pr-x/2-home-1280-dark.png#home 1280 dark",
-    "--attach",
-    ".playwright-mcp/pr-x/10-not-found-360-light.png#not found 360 light",
+    `${DIR}/sign-in-light-1280.png#sign in, light, 1280 px`,
   ]);
+  assert.equal(args.at(-1), `${DIR}/not-found-dark-1280.png#not found, dark, 1280 px`);
+});
+
+test("screenshotAttachments refuses a partial, padded or stale set", () => {
+  const partial = captured(2000).slice(1);
+  const padded = [...captured(2000), { name: "trace.zip", mtimeMs: 2000 }];
+  const stale = captured(2000).map((file, i) => (i === 3 ? { ...file, mtimeMs: 500 } : file));
+
+  assert.match(screenshotAttachments(DIR, partial, 1000).error ?? "", /exactly the 20 captures/);
+  assert.match(screenshotAttachments(DIR, padded, 1000).error ?? "", /exactly the 20 captures/);
+  assert.match(screenshotAttachments(DIR, [], 1000).error ?? "", /npm run check -- functional/);
+  assert.match(screenshotAttachments(DIR, stale, 1000).error ?? "", /older than this branch's/);
 });
 
 test("specTitle reads the title from the spec heading", () => {
