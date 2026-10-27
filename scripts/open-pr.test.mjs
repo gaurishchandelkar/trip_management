@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { changesUi, ghCandidates, screenshotAttachments, specTitle } from "./open-pr.mjs";
+import {
+  changesUi,
+  ghCandidates,
+  screenshotAttachments,
+  specTitle,
+  titleAndBody,
+} from "./open-pr.mjs";
 import { EXPECTED } from "./screenshot-summary.mjs";
 
 const DIR = "test-results/screenshots";
@@ -45,6 +51,42 @@ test("specTitle reads the title from the spec heading", () => {
     "App shell and design system",
   );
   assert.equal(specTitle("# Plan: Not a spec\n"), null);
+});
+
+test("titleAndBody takes a spec's title, and keeps its body whole", () => {
+  const body = "## Summary\n\nDone.\n";
+
+  assert.deepEqual(titleAndBody("# Spec: Members and groups\n", body), {
+    title: "Members and groups",
+    body,
+  });
+  assert.equal(titleAndBody("# Plan: not a spec\n", body), null);
+});
+
+test("titleAndBody takes the title from the body's heading, even when a spec has the name", () => {
+  const expected = { title: "Retro: CI screenshots", body: "## Summary\n\nDone.\n" };
+  const bom = String.fromCodePoint(0xfeff);
+
+  assert.deepEqual(
+    titleAndBody(null, "# Retro: CI screenshots\r\n\r\n## Summary\n\nDone.\n"),
+    expected,
+  );
+  // A retro of a spec is named after the spec, but its heading still names the PR.
+  assert.deepEqual(
+    titleAndBody("# Spec: S\n", "# Retro: CI screenshots\n\n## Summary\n\nDone.\n"),
+    expected,
+  );
+  assert.deepEqual(
+    titleAndBody(null, `${bom}# Retro: CI screenshots  \n## Summary\n\nDone.\n`),
+    expected,
+  );
+  assert.deepEqual(titleAndBody(null, "# Only a title"), { title: "Only a title", body: "" });
+});
+
+test("titleAndBody refuses a body with no usable heading and no spec", () => {
+  assert.equal(titleAndBody(null, "## Summary\n\n# Not first\n"), null);
+  assert.equal(titleAndBody(null, "#    \n\nBody\n"), null);
+  assert.equal(titleAndBody(null, ""), null);
 });
 
 test("every spec has a title the PR can use", () => {

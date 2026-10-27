@@ -13,6 +13,34 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-27: PRs without a spec were opened by hand
+- Signal: repetitive task
+- What happened: `npm run pr` refused any change without a spec ("No spec at docs/specs/<name>.md"), since it took the title from the spec. So PRs #6 (a retro), #7 (the README) and #8 (PR screenshots) were each opened with a hand-built `gh pr create` line run from its full Windows path. That line was too long for the human to type without wrapping, which the `CLAUDE.md` command-length rule exists to avoid.
+- Improvement: safeguard. With no spec, `scripts/open-pr.mjs` takes the title from a `# <title>` first line of `.git/PR_BODY_<name>.md` and sends the rest as the body. It still refuses a body without one. `docs/PROCESS.md` says how to hand over a small change or a retro, and the README shows `npm run pr -- <name>`.
+
+  Proof: `scripts/open-pr.test.mjs` covers a spec's title, a heading title with CRLF line ends, and refusing a body whose first line isn't a heading. Run with a no-spec body that lacks the heading, the script exits 1 and says the body must start with `# <title>`.
+- Enforced: yes (unit stage)
+
+## 2026-10-27: A feature replaced a manual step, but the skill kept it
+- Signal: escaped defect
+- What happened: `ci-screenshot-artifacts` existed so reviewers would see "the UI the code produces rather than screenshots an agent took by hand". Its spec and plan never named `/ship` step 5, which still had the agent take PR screenshots by hand. The defect showed up after the merge, when the human found old hand-taken images and asked for the e2e captures. PR #8 fixed it.
+- Improvement: skill, in `.claude/skills/plan/SKILL.md` (approved by the human on 2026-10-27). When a change replaces or automates a manual step, search `.claude/skills/`, `docs/` and `scripts/` for that step, and list each place that changes in the plan.
+- Enforced: documented only (whether a step is the same one in other words takes judgement; `/plan`'s own checklist covers it)
+
+## 2026-10-27: Small changes to harness files skipped the reviewers
+- Signal: harness defect
+- What happened: The process gave a small harness change less evidence than a feature. PRs #7 and #8 went through "Small changes outside a plan", which asks for a test, `npm run check` and a commit, but no review. PR #8 changed a protected skill and the script that opens every PR, and no reviewer ran on it. The first review under the new rule, on this retro's own `open-pr.mjs` change, found a regression (a long PR body could fail on Windows with no message) and a wrong title for a retro named after a spec. Both were fixed before merge.
+- Improvement: rule, in `docs/PROCESS.md` (approved by the human on 2026-10-27). A small change that touches the harness (`.claude/`, `.github/`, `scripts/`, `e2e/conftest.py`, `lefthook.yml` or the check config) still runs `code-reviewer`, and `security-reviewer` too when it touches input handling, CI or permissions.
+- Enforced: documented only (a reviewer's run leaves no artifact a check could find)
+
+## 2026-10-27: Harness log entries drifted from their format
+- Signal: repeated review feedback
+- What happened: `code-reviewer` found that this log's Improvement types kept drifting from the format at the top: "script", "fixed in this retro" and, in this retro's draft, "process". A type outside the list doesn't map to a row of the `/retro` table, so it hides how strong the improvement is.
+- Improvement: test. `scripts/harness-config.test.mjs` checks that every entry has a Signal from the list, and an Improvement that starts with a type from the list or `none`. The three off-format entries now say `safeguard`, `skill` and `rule`.
+
+  Proof: run on the log before the fix, the check named all three entries.
+- Enforced: yes (unit stage)
+
 ## 2026-10-27: PR screenshots still came from an agent's browser
 - Signal: harness defect
 - What happened: After CI started capturing the screens, `/ship` still told the agent to take PR screenshots by hand into `.playwright-mcp/pr-<name>/`, and `npm run pr` attached whatever was there. The human found an old hand-taken set in `.playwright-mcp/final-ui/` and asked for the e2e captures instead. Nothing tied hand-taken images to the code in the PR.
@@ -141,7 +169,7 @@ Entry format:
   - `gh` wasn't on Git Bash's PATH, though it's installed in `C:\Program Files\GitHub CLI`.
   - The wrapped `gh pr create` line was split, so bash ran the PR body file as a script, which failed harmlessly on its first line.
   - Once `gh` was found, the wrapped title was stored first with a line break and then with three spaces. It took a third `gh pr edit` to fix it.
-- Improvement: script. `scripts/open-pr.mjs` (`npm run pr -- <spec-name>`) takes the title from the spec's `# Spec:` heading and the body from `.git/PR_BODY_<name>.md`. It finds `gh` on PATH or where Windows installs it, and refuses names that aren't kebab-case. `scripts/open-pr.test.mjs` checks title extraction, that every spec has a usable title, and the Windows search paths. It's for the human: agents still never open PRs. Approved by the human: `/ship` now hands over `npm run pr -- <name>`, one short command per line. It saves final-UI screenshots to `.playwright-mcp/pr-<name>/`, which the script attaches with `gh pr create --attach` (gh 2.103+). Contrary to what this session first told the human, `gh` can upload images to a PR.
+- Improvement: safeguard. `scripts/open-pr.mjs` (`npm run pr -- <spec-name>`) takes the title from the spec's `# Spec:` heading and the body from `.git/PR_BODY_<name>.md`. It finds `gh` on PATH or where Windows installs it, and refuses names that aren't kebab-case. `scripts/open-pr.test.mjs` checks title extraction, that every spec has a usable title, and the Windows search paths. It's for the human: agents still never open PRs. Approved by the human: `/ship` now hands over `npm run pr -- <name>`, one short command per line. It saves final-UI screenshots to `.playwright-mcp/pr-<name>/`, which the script attaches with `gh pr create --attach` (gh 2.103+). Contrary to what this session first told the human, `gh` can upload images to a PR.
 - Enforced: yes for the script's behaviour (unit stage); using it is documented only, in the `/ship` skill
 
 ## 2026-10-26: A uvicorn worker kept port 8000 after its parent was stopped
@@ -153,7 +181,7 @@ Entry format:
 ## 2026-10-26: STATUS still said "awaiting review" after the merge
 - Signal: harness defect
 - What happened: `/implement` set `docs/STATUS.md` to "awaiting `/ship` and review", and nothing updated it after PR #3 merged. `main` claimed work was in progress that had shipped.
-- Improvement: fixed in this retro. Approved by the human: `/retro` now has a step to move merged work out of STATUS's "In progress".
+- Improvement: skill. Approved by the human: `/retro` now has a step to move merged work out of STATUS's "In progress".
 - Enforced: documented only (a check can't know when a PR merged without network access)
 
 ## 2026-10-26: A plan named a dependency version from memory

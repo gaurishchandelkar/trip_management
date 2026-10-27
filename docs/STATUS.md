@@ -21,14 +21,14 @@
   - E2E runs on dedicated ports, so a running dev server is never what gets tested.
   - E2E is pytest + Playwright against a fresh production build. Each journey has an outside test (what the user sees) and an inside test (the exact API calls, via `e2e/network.py`), paired with `@covers` and checked by `scripts/harness-config.test.mjs`.
   - `e2e/test_screenshots.py` captures 20 screenshots of the main screens against its own servers (ports 8101 and 5274) with fixed sample data.
-- **CI:** GitHub Actions runs one job per stage. The functional job uploads the screenshots as `ui-screenshots` on every run, kept 14 days, and lists them in its job summary (`scripts/screenshot-summary.mjs`). Dependabot and CODEOWNERS are configured. GitHub doesn't protect `main`: the repo is private on a free plan, so GitHub refuses branch protection (403). A lefthook pre-commit job (`scripts/refuse-main.mjs`) refuses local commits on `main` instead. Once the plan changes, `scripts/protect-branch.mjs --solo` requires PRs, an up-to-date branch and all 7 CI checks, admins included.
+- **CI:** GitHub Actions runs one job per stage. The functional job uploads the screenshots as `ui-screenshots` on every run, kept 14 days, and lists them in its job summary (`scripts/screenshot-summary.mjs`). `npm run pr` attaches the same 20 captures to a PR that changes the UI, refusing a partial or stale set, and opens PRs with or without a spec. Dependabot and CODEOWNERS are configured. GitHub doesn't protect `main`: the repo is private on a free plan, so GitHub refuses branch protection (403). A lefthook pre-commit job (`scripts/refuse-main.mjs`) refuses local commits on `main` instead. Once the plan changes, `scripts/protect-branch.mjs --solo` requires PRs, an up-to-date branch and all 7 CI checks, admins included.
 - **Staged autonomy:** the `/spec`, `/plan`, `/implement`, `/ship` and `/retro` skills, the `code-reviewer` and `security-reviewer` subagents, and the PR template.
 - **Flywheel and metrics:** `docs/HARNESS_LOG.md`, `docs/METRICS.md` and `npm run metrics`.
 - **Reference example:** `docs/specs/personalised-greeting.md` and `docs/plans/PLAN_personalised-greeting.md`.
 
 ## In progress
 
-- Nothing. CI screenshot artifacts (`docs/specs/ci-screenshot-artifacts.md`) merged as PR #5, and is described under **Current state** (Verification and CI).
+- Nothing. CI screenshot artifacts merged as PR #5, and PR screenshots from the e2e captures as PR #8. Both are described under **Current state** (Verification and CI).
 
 ## Known gaps
 

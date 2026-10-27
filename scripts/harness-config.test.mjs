@@ -429,3 +429,58 @@ test("ownContexts catches a browser context opened outside the fixtures", () => 
 
   assert.equal(ownContexts(source).length, 2);
 });
+
+// Each log entry's Signal and Improvement are the words of the /retro table, so a reader can tell
+// how strong each improvement is (docs/HARNESS_LOG.md, pr-screenshots-from-e2e retro).
+const SIGNALS = [
+  "escaped defect",
+  "architecture violation",
+  "security issue",
+  "repeated review feedback",
+  "repetitive task",
+  "successful pattern",
+  "harness defect",
+];
+const IMPROVEMENTS = /^(?:test|rule|safeguard|guideline|skill|template|none)\b/;
+
+export function offFormatEntries(log) {
+  return log
+    .split(/^## /m)
+    .slice(1)
+    .filter((entry) => /^\d{4}-\d{2}-\d{2}: /.test(entry))
+    .flatMap((entry) => {
+      const title = entry.split("\n")[0];
+      const signal = /^- Signal: (.*)$/m.exec(entry)?.[1].trim();
+      const improvement = /^- Improvement: (.*)$/m.exec(entry)?.[1] ?? "";
+      return [
+        ...(SIGNALS.includes(signal) ? [] : [`${title}: Signal "${signal ?? ""}"`]),
+        ...(IMPROVEMENTS.test(improvement)
+          ? []
+          : [`${title}: Improvement "${improvement.slice(0, 30)}"`]),
+      ];
+    });
+}
+
+test("every harness log entry uses the signal and improvement types of its format", () => {
+  const log = readFileSync("docs/HARNESS_LOG.md", "utf8");
+  assert.ok(log.split(/^## \d{4}-/m).length > 20, "Expected the log's dated entries.");
+
+  assert.deepEqual(offFormatEntries(log), [], "Use the types at the top of docs/HARNESS_LOG.md.");
+});
+
+test("offFormatEntries names an entry with an unknown signal or improvement type", () => {
+  const log = [
+    "# Harness Log",
+    "## 2026-10-27: Good",
+    "- Signal: harness defect",
+    "- Improvement: test and safeguard. More.",
+    "## 2026-10-27: Odd",
+    "- Signal: hunch",
+    "- Improvement: process, in a doc.",
+  ].join("\n");
+
+  assert.deepEqual(offFormatEntries(log), [
+    '2026-10-27: Odd: Signal "hunch"',
+    '2026-10-27: Odd: Improvement "process, in a doc."',
+  ]);
+});
