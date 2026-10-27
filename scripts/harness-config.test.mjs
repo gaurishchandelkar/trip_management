@@ -1,7 +1,7 @@
 // Checks that safeguards cover the code they're meant to (docs/HARNESS_LOG.md, python-e2e-whitebox retro).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 // Folders pyright type-checks, from pyproject.toml's [tool.pyright] include.
@@ -362,6 +362,42 @@ test("titleReads finds a direct read of document.title", () => {
   ];
 
   assert.deepEqual(titleReads(files), ["b.test.tsx:2"]);
+});
+
+// The README is the first thing a newcomer runs from, so its commands and links must exist.
+export function readmeDrift(readme, scripts, exists) {
+  const commands = [...readme.matchAll(/`npm run ([\w:-]+)/g)].map(([, name]) => name);
+  const links = [...readme.matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/g)]
+    .map(([, target]) => target)
+    .filter((target) => !/^[a-z]+:/i.test(target));
+  return {
+    missingScripts: [...new Set(commands)].filter((name) => !(name in scripts)),
+    brokenLinks: [...new Set(links)].filter((target) => !exists(target)),
+  };
+}
+
+test("the README's npm commands and file links exist", () => {
+  const readme = readFileSync("README.md", "utf8");
+  const { scripts } = JSON.parse(readFileSync("package.json", "utf8"));
+  assert.match(readme, /`npm run check`/, "Expected the README to name npm run check.");
+
+  assert.deepEqual(readmeDrift(readme, scripts, existsSync), {
+    missingScripts: [],
+    brokenLinks: [],
+  });
+});
+
+test("readmeDrift catches a missing script and a broken link", () => {
+  const readme = [
+    "Run `npm run dev` or `npm run start`.",
+    "See [the spec](docs/SPEC.md), [old plan](docs/gone.md), [setup](#run-it) and [uv](https://x.y).",
+  ].join("\n");
+  const exists = (target) => target === "docs/SPEC.md";
+
+  assert.deepEqual(readmeDrift(readme, { dev: "vite" }, exists), {
+    missingScripts: ["start"],
+    brokenLinks: ["docs/gone.md"],
+  });
 });
 
 // pytest-playwright traces and screenshots only the contexts its fixtures open, so a browser
