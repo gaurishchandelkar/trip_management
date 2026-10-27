@@ -2,12 +2,12 @@
 
 import re
 import uuid
-from collections.abc import Iterator
 from typing import Literal
 from urllib.parse import urlsplit
 
 import pytest
-from playwright.sync_api import Browser, Dialog, Page, Route, expect
+from playwright.sync_api import Dialog, Page, Route, expect
+from pytest_playwright import CreateContextCallback
 
 from e2e.app import (
     PHONE,
@@ -35,11 +35,9 @@ from e2e.app import (
 
 
 @pytest.fixture
-def other_page(browser: Browser, base_url: str) -> Iterator[Page]:
-    """A second member's browser, with its own cookies."""
-    context = browser.new_context(base_url=base_url)
-    yield context.new_page()
-    context.close()
+def other_page(new_context: CreateContextCallback) -> Page:
+    """A second member's browser, with its own cookies. Traced like `page` if the test fails."""
+    return new_context().new_page()
 
 
 def test_shows_sign_in_and_register_forms(page: Page) -> None:

@@ -48,6 +48,9 @@ The frontend follows the same idea: components render, `api.ts` talks to the bac
   - Keep the two apart, so a contract break fails the inside test while the outside test still passes.
   - Wait for the page's initial state (the loaded session check, `GET /api/me`) before interacting, so the test never races the first request.
   - Wrap each action in `page.expect_response(...)` for the call it should cause, then assert. Don't use `networkidle`: it settles once per navigation, so it doesn't wait for calls caused by a later click. "No extra calls" covers calls made before the assertion. Never use sleeps.
+  - Open a second member's browser with pytest-playwright's `new_context` fixture, never `browser.new_context`. Only the fixture's contexts keep a trace and screenshot when the test fails. *Enforced by:* `scripts/harness-config.test.mjs`.
+- In vitest, wait for anything a screen sets in an effect rather than reading it once after the screen shows. Check the tab title with `await expectTitle(...)` from `frontend/src/test-utils.ts`; a single read of `document.title` raced the effect on CI. *Enforced by:* `scripts/harness-config.test.mjs`.
+- A script whose exit code CI relies on gets a test that runs it as CI does, with `spawnSync`, and checks that exit code for a pass and a failure (`scripts/check.test.mjs`). *Enforced by:* `scripts/harness-config.test.mjs`, for every `node scripts/<name>.mjs` in `ci.yml`.
 - Tests are deterministic, with no real network calls, sleeps or order dependence.
 - Make time and concurrency deterministic: inject the clock through a FastAPI dependency and override it in tests (`app.dependency_overrides`), and test races with threads started together on a `threading.Barrier`, never with sleeps.
 - Assert through public interfaces: HTTP responses, the OpenAPI schema, the rendered DOM. Never assert on framework internals.

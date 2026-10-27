@@ -13,6 +13,54 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-27: Vitest title checks raced the effect that sets the title
+- Signal: harness defect
+- What happened: PR #5's second CI run failed the unit job on `App.test.tsx > shows the signed-in member beside their avatar`: "expected 'Sign in · Caravan' to be 'Groups · Caravan'". The PR changed no frontend code, and a re-run passed. It's likely the unexplained App.test failure seen once in pre-commit during app-shell-and-design-system. Screens set `document.title` in an effect. Seven tests read it once, right after the screen's content showed, so a slow runner could read it before the effect ran. jsdom also kept the last test's title, so a stale title could even pass a check.
+- Improvement: test and safeguard.
+  - `frontend/src/test-utils.ts` adds `expectTitle`, which waits for the title. All seven checks use it, with unchanged expected titles.
+  - `frontend/src/test-setup.ts` clears the title after each test.
+  - `scripts/harness-config.test.mjs` fails on any `document.title` in a frontend test file.
+  - `docs/CODING_GUIDELINES.md` says to wait for anything a screen sets in an effect.
+
+  Proof: with the title set 20 ms late on purpose, the seven old checks failed and the new ones passed (96/96). The scan, run on the old tests, named all seven lines.
+- Enforced: yes (unit stage)
+
+## 2026-10-27: CI's own pipeline script had no test of its exit code
+- Signal: repeated review feedback
+- What happened: At `/ship`, `code-reviewer` found that `scripts/screenshot-summary.mjs` set the exit code CI relies on, and no test ran it; it was fixed in the PR. The same gap held for `scripts/check.mjs`, which decides every CI job: nothing showed that a failed stage makes it exit 1.
+- Improvement: test and safeguard.
+  - `scripts/check.test.mjs` runs `check.mjs` as CI does, with a fake `npm` first on PATH. It covers every stage passing, the first failure stopping the run with exit 1, selected stages, and an unknown stage exiting 2.
+  - `scripts/harness-config.test.mjs` fails if a `node scripts/<name>.mjs` in `ci.yml` has no `scripts/<name>.test.mjs` that spawns it.
+
+  Proof: deleting `process.exit(1)` from `check.mjs` failed "stops at the first failing stage" (actual 0, expected 1). Without `check.test.mjs`, the scan reported `check`.
+- Enforced: yes (unit stage)
+
+## 2026-10-27: A second member's browser kept no trace when a test failed
+- Signal: repeated review feedback
+- What happened: At `/ship`, `code-reviewer` found that the screenshot captures opened their own browser contexts, so a failed capture's trace showed only the blank fixture page. They were moved to pytest-playwright's `new_context` fixture in the PR. The `other_page` fixtures in `test_journeys.py` and `test_network_contract.py` had the same gap: a failure on the second member's side left nothing to debug.
+- Improvement: safeguard. Both `other_page` fixtures use `new_context`. `scripts/harness-config.test.mjs` fails on `browser.new_context(` or `browser.new_page(` in `e2e/`, and `docs/CODING_GUIDELINES.md` says why.
+
+  Proof: run on the old fixtures, the scan named both lines.
+- Enforced: yes (unit stage)
+
+## 2026-10-27: File names reached the job summary as Markdown
+- Signal: security issue
+- What happened: At `/ship`, `security-reviewer` found that `scripts/screenshot-summary.mjs` printed unexpected file names into `$GITHUB_STEP_SUMMARY` without escaping, so a crafted name could add links or headings. It was fixed in the PR: only names matching `[\w.-]+` are printed, and a test covers it. No other script writes Markdown from untrusted text today.
+- Improvement: guideline, drafted for `docs/SECURITY_GUIDELINES.md` (protected; awaiting approval): text from files, branches, PR titles or tool output that goes into a job summary, PR comment or Markdown report is untrusted. Print only values that match a strict allowlist, and count or escape the rest.
+- Enforced: documented only (whether text is untrusted depends on where it came from; `security-reviewer` checks it)
+
+## 2026-10-27: Commands handed to the human wrapped and failed
+- Signal: repetitive task
+- What happened: Commands the agent gave to the human to run with `!` broke five times when the terminal wrapped them: two `gh pr create` attempts that failed, a third that gave PR #3's title a newline and extra spaces, and two `git branch -d` commands that deleted only the first branch named. The `/ship` skill already says to keep its hand-over commands short, but other replies didn't.
+- Improvement: guideline, drafted for `CLAUDE.md` (protected; awaiting approval): give the human one short command per line, under 70 characters, with no `&&` chains. If a safe local command is long, offer to run it instead.
+- Enforced: documented only (the terminal's width isn't known to any check)
+
+## 2026-10-27: A coverage row rested on a manual proof without saying so
+- Signal: repeated review feedback
+- What happened: At `/ship`, `code-reviewer` found that the coverage row for screens that fail to load named tests that couldn't show the whole criterion. Part of it rested on negative proofs recorded in the plan's success criteria. The row was reworded in the PR.
+- Improvement: template. `docs/templates/PLAN_TEMPLATE.md` asks a row that rests partly on a manual proof to say so and name the success criterion that records it.
+- Enforced: documented only (a manual proof can't be checked by a test, which is why it's manual)
+
 ## 2026-10-26: CI publishes screenshots of the UI on every run
 - Signal: successful pattern
 - What happened: For PR #3, the screenshots reviewers saw were ones an agent took by hand in a dev browser. Some showed the UI before the last phase, and attaching them took several manual attempts. Nothing tied them to the code being merged.
@@ -26,7 +74,7 @@ Entry format:
   - holding a request failed the capture with the screen's name and saved no image
   - a folder missing one image made the summary exit 1
   - removing `if: always()` failed the config test
-  - two local runs produced identical images
+  - two local runs produced identical images, and so did two CI runs on PR #5 (40383285851 and 40432402406)
 
   The stage got 8.4 s slower (159.6 s to 168.0 s).
 - Enforced: yes (functional stage, unit stage, and the CI step itself)

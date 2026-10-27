@@ -290,3 +290,106 @@ test("the PR template tells reviewers where the UI screenshots are", () => {
 
   assert.match(verification, /`ui-screenshots` artifact/);
 });
+
+// CI's verdict is the exit code of each script it runs, so each one is tested by running it as
+// CI does (docs/HARNESS_LOG.md, ci-screenshot-artifacts retro).
+const SPAWNS = /\b(?:spawn|execFile)(?:Sync)?\(/;
+
+export function untestedCiScripts(workflow, readSource) {
+  const scripts = new Set(
+    [...workflow.matchAll(/\bnode scripts\/([\w-]+)\.mjs\b/g)].map(([, s]) => s),
+  );
+  return [...scripts].filter((script) => {
+    const source = readSource(`scripts/${script}.test.mjs`);
+    return source === null || !source.includes(`scripts/${script}.mjs`) || !SPAWNS.test(source);
+  });
+}
+
+test("every script CI runs has a test that runs it and checks its exit code", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  assert.match(workflow, /node scripts\/check\.mjs/, "Expected CI to run scripts/check.mjs.");
+
+  const untested = untestedCiScripts(workflow, readIfExists);
+
+  assert.deepEqual(untested, [], "Add scripts/<name>.test.mjs that spawns these scripts.");
+});
+
+test("untestedCiScripts catches a missing test and one that only imports the script", () => {
+  const workflow = [
+    "      - run: node scripts/check.mjs unit",
+    "      - run: node scripts/check.mjs lint",
+    "      - run: node scripts/summary.mjs out >> x",
+    "      - run: node scripts/report.mjs",
+  ].join("\n");
+  const sources = {
+    "scripts/check.test.mjs": 'spawnSync(process.execPath, ["scripts/check.mjs"]);',
+    "scripts/summary.test.mjs": 'import { summarize } from "./summary.mjs";',
+  };
+
+  assert.deepEqual(
+    untestedCiScripts(workflow, (file) => sources[file] ?? null),
+    ["summary", "report"],
+  );
+});
+
+// Screens set the tab title in an effect, which can run after their content shows, so a single
+// read of document.title raced it on CI. Tests wait for it with expectTitle (src/test-utils.ts).
+export function titleReads(files) {
+  return files.flatMap(([file, text]) =>
+    text
+      .split("\n")
+      .flatMap((line, index) =>
+        /document\.title/.test(line) ? [`${file}:${String(index + 1)}`] : [],
+      ),
+  );
+}
+
+test("frontend tests check the tab title only through expectTitle", () => {
+  const tests = readdirSync("frontend/src", { recursive: true })
+    .map((file) => `frontend/src/${file.replaceAll("\\", "/")}`)
+    .filter((file) => /\.test\.tsx?$/.test(file));
+  assert.ok(tests.includes("frontend/src/App.test.tsx"), `Expected the app's tests, got ${tests}`);
+
+  const found = titleReads(tests.map((file) => [file, readFileSync(file, "utf8")]));
+
+  assert.deepEqual(found, [], "Use `await expectTitle(...)` from src/test-utils.ts.");
+});
+
+test("titleReads finds a direct read of document.title", () => {
+  const files = [
+    ["a.test.tsx", 'await expectTitle("Groups · Caravan");'],
+    ["b.test.tsx", 'render(<App />);\nexpect(document.title).toBe("Groups · Caravan");'],
+  ];
+
+  assert.deepEqual(titleReads(files), ["b.test.tsx:2"]);
+});
+
+// pytest-playwright traces and screenshots only the contexts its fixtures open, so a browser
+// opened with browser.new_context leaves nothing to debug when a test fails there.
+const OWN_CONTEXT = /\bbrowser\.new_(?:context|page)\(/;
+
+export function ownContexts(source) {
+  return source.split("\n").filter((line) => OWN_CONTEXT.test(line) && !/^\s*#/.test(line));
+}
+
+test("E2E tests open browsers through pytest-playwright's fixtures", () => {
+  const files = readdirSync("e2e").filter((file) => file.endsWith(".py"));
+  assert.ok(files.includes("test_journeys.py"), `Expected the E2E tests, got ${files.join(", ")}`);
+  const offenders = files.flatMap((file) =>
+    ownContexts(readFileSync(`e2e/${file}`, "utf8")).map((l) => `${file}: ${l}`),
+  );
+
+  assert.deepEqual(offenders, [], "Use the `new_context` fixture, so a failure keeps its trace.");
+});
+
+test("ownContexts catches a browser context opened outside the fixtures", () => {
+  const source = [
+    "    context = browser.new_context(base_url=base_url)",
+    "    page = browser.new_page()",
+    "    # browser.new_context loses the trace",
+    "    other = new_context().new_page()",
+    "    api = playwright.request.new_context(base_url=url)",
+  ].join("\n");
+
+  assert.equal(ownContexts(source).length, 2);
+});

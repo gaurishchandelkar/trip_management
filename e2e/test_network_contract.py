@@ -3,12 +3,12 @@
 Each test waits for the specific response it expects, then asserts every /api/ call made by then.
 """
 
-from collections.abc import Iterator
 from typing import cast
 from urllib.parse import urlsplit
 
 import pytest
-from playwright.sync_api import Browser, Page, expect
+from playwright.sync_api import Page, expect
+from pytest_playwright import CreateContextCallback
 
 from e2e.app import (
     PHONE,
@@ -44,11 +44,9 @@ HOME = [MY_GROUPS, BROWSE]
 
 
 @pytest.fixture
-def other_page(browser: Browser, base_url: str) -> Iterator[Page]:
+def other_page(new_context: CreateContextCallback) -> Page:
     """A second member's browser. Its traffic isn't recorded: it only sets the scene."""
-    context = browser.new_context(base_url=base_url)
-    yield context.new_page()
-    context.close()
+    return new_context().new_page()
 
 
 @covers("test_shows_sign_in_and_register_forms")
