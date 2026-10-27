@@ -63,12 +63,30 @@ test("titleAndBody takes a spec's title, and keeps its body whole", () => {
   assert.equal(titleAndBody("# Plan: not a spec\n", body), null);
 });
 
-test("titleAndBody takes the title from the body's heading when there's no spec", () => {
-  assert.deepEqual(titleAndBody(null, "# Retro: CI screenshots\r\n\r\n## Summary\n\nDone.\n"), {
-    title: "Retro: CI screenshots",
-    body: "## Summary\n\nDone.\n",
-  });
+test("titleAndBody takes the title from the body's heading, even when a spec has the name", () => {
+  const expected = { title: "Retro: CI screenshots", body: "## Summary\n\nDone.\n" };
+  const bom = String.fromCodePoint(0xfeff);
+
+  assert.deepEqual(
+    titleAndBody(null, "# Retro: CI screenshots\r\n\r\n## Summary\n\nDone.\n"),
+    expected,
+  );
+  // A retro of a spec is named after the spec, but its heading still names the PR.
+  assert.deepEqual(
+    titleAndBody("# Spec: S\n", "# Retro: CI screenshots\n\n## Summary\n\nDone.\n"),
+    expected,
+  );
+  assert.deepEqual(
+    titleAndBody(null, `${bom}# Retro: CI screenshots  \n## Summary\n\nDone.\n`),
+    expected,
+  );
+  assert.deepEqual(titleAndBody(null, "# Only a title"), { title: "Only a title", body: "" });
+});
+
+test("titleAndBody refuses a body with no usable heading and no spec", () => {
   assert.equal(titleAndBody(null, "## Summary\n\n# Not first\n"), null);
+  assert.equal(titleAndBody(null, "#    \n\nBody\n"), null);
+  assert.equal(titleAndBody(null, ""), null);
 });
 
 test("every spec has a title the PR can use", () => {

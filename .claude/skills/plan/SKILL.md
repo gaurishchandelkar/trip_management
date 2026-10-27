@@ -22,6 +22,7 @@ Plan the spec `docs/specs/$ARGUMENTS.md`. If it doesn't exist, stop and suggest 
    - Every acceptance criterion in the spec maps to at least one success criterion.
    - No phase depends on code from a later phase.
    - Nothing in the plan goes beyond the spec.
+   - When the change replaces or automates a manual step, search `.claude/skills/`, `docs/` and `scripts/` for that step, and list each place that changes.
 
 ## Stop
 
