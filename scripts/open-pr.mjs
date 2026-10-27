@@ -1,5 +1,5 @@
 // Opens the PR that /ship prepared. For the human to run: agents never push or open PRs
-// (docs/RULES.md). Usage: npm run pr -- <spec-name>
+// (docs/RULES.md). Usage: npm run pr -- <spec-name>, or the name of a change without a spec
 // One short command, because a long `gh pr create` line wraps in a terminal and the break ends up
 // in the PR title, and gh may be installed but missing from Git Bash's PATH
 // (docs/HARNESS_LOG.md, app-shell-and-design-system retro).
@@ -51,6 +51,21 @@ export function specTitle(spec) {
   return /^# Spec: (.+)$/m.exec(spec)?.[1].trim() ?? null;
 }
 
+/**
+ * The PR's title and body. A spec's PR takes the spec's title. A change without a spec (a retro
+ * or a small fix) starts its body with a "# <title>" line, which becomes the title.
+ */
+export function titleAndBody(spec, body) {
+  if (spec !== null) {
+    const title = specTitle(spec);
+    return title === null ? null : { title, body };
+  }
+  const heading = /^# (.+)\r?\n(?:\r?\n)*/.exec(body);
+  return heading === null
+    ? null
+    : { title: heading[1].trim(), body: body.slice(heading[0].length) };
+}
+
 export function ghCandidates(platform, env) {
   if (platform !== "win32") return ["gh"];
   const dirs = [env.ProgramFiles, env.LOCALAPPDATA && `${env.LOCALAPPDATA}\\Programs`];
@@ -70,14 +85,19 @@ function fail(message) {
 
 function main() {
   const name = process.argv[2] ?? "";
-  if (!SPEC_NAME.test(name)) return fail("Usage: npm run pr -- <spec-name>, such as app-shell");
+  if (!SPEC_NAME.test(name)) return fail("Usage: npm run pr -- <name>, such as app-shell");
 
   const specPath = `docs/specs/${name}.md`;
   const bodyPath = `.git/PR_BODY_${name}.md`;
-  if (!existsSync(specPath)) return fail(`No spec at ${specPath}.`);
   if (!existsSync(bodyPath)) return fail(`No PR body at ${bodyPath}. Run /ship ${name} first.`);
-  const title = specTitle(readFileSync(specPath, "utf8"));
-  if (title === null) return fail(`${specPath} has no "# Spec: <title>" heading.`);
+  const spec = existsSync(specPath) ? readFileSync(specPath, "utf8") : null;
+  const pr = titleAndBody(spec, readFileSync(bodyPath, "utf8"));
+  if (pr === null)
+    return fail(
+      spec === null
+        ? `No spec at ${specPath}, so ${bodyPath} must start with a "# <title>" line.`
+        : `${specPath} has no "# Spec: <title>" heading.`,
+    );
 
   const gh = findGh();
   if (gh === undefined)
@@ -98,7 +118,7 @@ function main() {
     if (error !== undefined) return fail(error);
     attachments = args;
   }
-  const args = ["pr", "create", "--title", title, "--body-file", bodyPath, ...attachments];
+  const args = ["pr", "create", "--title", pr.title, "--body", pr.body, ...attachments];
   const { status } = spawnSync(gh, args, { stdio: "inherit" });
   process.exitCode = status ?? 1;
 }

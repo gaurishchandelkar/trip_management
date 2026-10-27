@@ -13,6 +13,26 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-10-27: PRs without a spec were opened by hand
+- Signal: repetitive task
+- What happened: `npm run pr` refused any change without a spec ("No spec at docs/specs/<name>.md"), since it took the title from the spec. So PRs #6 (a retro), #7 (the README) and #8 (PR screenshots) were each opened with a hand-built `gh pr create` line run from its full Windows path. That line was too long for the human to type without wrapping, which the `CLAUDE.md` command-length rule exists to avoid.
+- Improvement: safeguard. With no spec, `scripts/open-pr.mjs` takes the title from a `# <title>` first line of `.git/PR_BODY_<name>.md` and sends the rest as the body. It still refuses a body without one. `docs/PROCESS.md` says how to hand over a small change or a retro, and the README shows `npm run pr -- <name>`.
+
+  Proof: `scripts/open-pr.test.mjs` covers a spec's title, a heading title with CRLF line ends, and refusing a body whose first line isn't a heading. Run with a no-spec body that lacks the heading, the script exits 1 and says the body must start with `# <title>`.
+- Enforced: yes (unit stage)
+
+## 2026-10-27: A feature replaced a manual step, but the skill kept it
+- Signal: escaped defect
+- What happened: `ci-screenshot-artifacts` existed so reviewers would see "the UI the code produces rather than screenshots an agent took by hand". Its spec and plan never named `/ship` step 5, which still had the agent take PR screenshots by hand. The defect showed up after the merge, when the human found old hand-taken images and asked for the e2e captures. PR #8 fixed it.
+- Improvement: skill, drafted for `.claude/skills/plan/SKILL.md` (protected; awaiting approval). When a change replaces or automates a manual step, search `.claude/skills/`, `docs/` and `scripts/` for that step, and list each place that changes in the plan.
+- Enforced: documented only (whether a step is the same one in other words takes judgement; `/plan`'s own checklist covers it)
+
+## 2026-10-27: Small changes to harness files skipped the reviewers
+- Signal: repeated review feedback
+- What happened: PRs #7 and #8 went through "Small changes outside a plan", which asks for a test, `npm run check` and a commit, but no review. PR #8 changed a protected skill and the script that opens every PR, and no reviewer ran on it. At `/ship`, the reviewers found ten fixable issues in `ci-screenshot-artifacts`, mostly in its harness code, so a change to the harness gains from a review even when it's small.
+- Improvement: process, drafted for `docs/PROCESS.md` (awaiting approval). A small change that touches `.claude/`, `.github/`, `scripts/` or `e2e/conftest.py` still runs `code-reviewer`, and `security-reviewer` too when it touches input handling, CI or permissions.
+- Enforced: documented only (a reviewer's run leaves no artifact a check could find)
+
 ## 2026-10-27: PR screenshots still came from an agent's browser
 - Signal: harness defect
 - What happened: After CI started capturing the screens, `/ship` still told the agent to take PR screenshots by hand into `.playwright-mcp/pr-<name>/`, and `npm run pr` attached whatever was there. The human found an old hand-taken set in `.playwright-mcp/final-ui/` and asked for the e2e captures instead. Nothing tied hand-taken images to the code in the PR.

@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { changesUi, ghCandidates, screenshotAttachments, specTitle } from "./open-pr.mjs";
+import {
+  changesUi,
+  ghCandidates,
+  screenshotAttachments,
+  specTitle,
+  titleAndBody,
+} from "./open-pr.mjs";
 import { EXPECTED } from "./screenshot-summary.mjs";
 
 const DIR = "test-results/screenshots";
@@ -45,6 +51,24 @@ test("specTitle reads the title from the spec heading", () => {
     "App shell and design system",
   );
   assert.equal(specTitle("# Plan: Not a spec\n"), null);
+});
+
+test("titleAndBody takes a spec's title, and keeps its body whole", () => {
+  const body = "## Summary\n\nDone.\n";
+
+  assert.deepEqual(titleAndBody("# Spec: Members and groups\n", body), {
+    title: "Members and groups",
+    body,
+  });
+  assert.equal(titleAndBody("# Plan: not a spec\n", body), null);
+});
+
+test("titleAndBody takes the title from the body's heading when there's no spec", () => {
+  assert.deepEqual(titleAndBody(null, "# Retro: CI screenshots\r\n\r\n## Summary\n\nDone.\n"), {
+    title: "Retro: CI screenshots",
+    body: "## Summary\n\nDone.\n",
+  });
+  assert.equal(titleAndBody(null, "## Summary\n\n# Not first\n"), null);
 });
 
 test("every spec has a title the PR can use", () => {

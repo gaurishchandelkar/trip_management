@@ -83,6 +83,8 @@ On every CI run, the functional job uploads the 20 screenshots as the `ui-screen
 
 Bug fixes and tweaks that need no design decision can skip stages 1–2, but they still need a test, a passing `npm run check` and a commit.
 
+To hand one over, write its PR description to `.git/PR_BODY_<name>.md`, starting with a `# <title>` line, and give the human `npm run pr -- <name>`. The name is the branch name without its prefix, such as `readme-app-details` for `docs/readme-app-details`. With no spec to name the PR, `npm run pr` takes that line as the title. A retro does the same.
+
 ## Background processes
 
 Stop every dev server you start. On Windows, `uvicorn --reload` leaves a worker process that outlives its parent, so stop it by port, not by its parent's PID.
