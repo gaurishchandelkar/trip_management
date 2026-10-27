@@ -71,11 +71,13 @@ build → lint → unit → integration → functional → security → architec
 | lint | ruff format/check, pyright, Prettier, ESLint |
 | unit | pytest `backend/tests/unit`, vitest (80% coverage gates), `node --test` on `.claude/hooks/*.test.mjs` and `scripts/*.test.mjs` (the harness's own tests) |
 | integration | pytest `backend/tests/integration` |
-| functional | pytest + Playwright `e2e/` on a fresh production build: outside (what the user sees) and inside (the exact API calls) |
+| functional | pytest + Playwright `e2e/` on a fresh production build: outside (what the user sees) and inside (the exact API calls), plus screenshots of each main screen in `test-results/screenshots/` |
 | security | pip-audit, npm audit, detect-secrets |
 | architecture | import-linter |
 
 The pre-commit hook runs the fast stages for staged files. CI runs every stage on every PR.
+
+On every CI run, the functional job uploads the 20 screenshots as the `ui-screenshots` artifact, kept 14 days, and lists them in its job summary. Reviewers see the UI from there, not from screenshots an agent took by hand.
 
 ## Small changes outside a plan
 

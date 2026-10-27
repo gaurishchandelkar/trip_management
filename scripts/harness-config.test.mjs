@@ -221,3 +221,72 @@ test("planCoverage catches a row without a test and a reference to a missing tes
     { unknown: ["src/App.test.tsx::shows the old name"], unnamed: ["Signs out"] },
   );
 });
+
+// CI uploads the UI screenshots on every run and summarises them (docs/specs/ci-screenshot-artifacts.md).
+// A small reader for this workflow's layout: jobs at two spaces, steps at six.
+export function jobSteps(workflow, job) {
+  const start = workflow.indexOf(`\n  ${job}:\n`);
+  if (start === -1) return [];
+  const rest = workflow.slice(start + job.length + 5);
+  const end = rest.search(/\n {2}\S/);
+  const body = end === -1 ? rest : rest.slice(0, end);
+  return body.split(/\n(?= {6}- )/).filter((step) => step.trimStart().startsWith("- "));
+}
+
+test("the functional job uploads the UI screenshots on every run", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const steps = jobSteps(workflow, "functional");
+  const upload = steps.find((step) => step.includes("name: ui-screenshots"));
+  const summary = steps.find((step) => step.includes("scripts/screenshot-summary.mjs"));
+
+  assert.ok(upload, "No upload step for ui-screenshots in the functional job.");
+  // Whole lines, so `retention-days: 140` or a commented-out `# if: always()` doesn't pass.
+  const hasLine = (step, setting) =>
+    step.split("\n").some((line) => /^\s*(?:- )?(.*?)\s*$/.exec(line)?.[1] === setting);
+  for (const setting of [
+    "uses: actions/upload-artifact@v7",
+    "if: always()",
+    // Images only, so nothing else that lands in the folder is ever published.
+    "path: test-results/screenshots/*.png",
+    "retention-days: 14",
+    "if-no-files-found: error",
+  ]) {
+    assert.ok(hasLine(upload, setting), `The ui-screenshots upload needs \`${setting}\`.`);
+  }
+  assert.ok(summary, "No step writes the UI screenshots summary.");
+  assert.ok(hasLine(summary, "if: always()"), "The summary step needs `if: always()`.");
+  assert.ok(summary.includes('>> "$GITHUB_STEP_SUMMARY"'), "The summary goes to the job summary.");
+  // The summary needs no write token: the workflow stays read-only.
+  assert.match(workflow, /^permissions:\n {2}contents: read\n(?! )/m);
+  assert.doesNotMatch(workflow, /: write\b/);
+});
+
+test("jobSteps reads only the named job's steps", () => {
+  const workflow = [
+    "jobs:",
+    "  unit:",
+    "    steps:",
+    "      - run: one",
+    "  functional:",
+    "    steps:",
+    "      - run: two",
+    "      - uses: x",
+    "        if: always()",
+    "  security:",
+    "    steps:",
+    "      - run: three",
+  ].join("\n");
+
+  assert.deepEqual(jobSteps(workflow, "functional"), [
+    "      - run: two",
+    "      - uses: x\n        if: always()",
+  ]);
+  assert.deepEqual(jobSteps(workflow, "missing"), []);
+});
+
+test("the PR template tells reviewers where the UI screenshots are", () => {
+  const template = readFileSync(".github/PULL_REQUEST_TEMPLATE.md", "utf8");
+  const verification = /^## Verification evidence\n([\s\S]*?)(?=^## )/m.exec(template)?.[1] ?? "";
+
+  assert.match(verification, /`ui-screenshots` artifact/);
+});

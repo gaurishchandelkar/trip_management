@@ -9,7 +9,8 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,8 @@ VITE = ROOT / "node_modules" / "vite" / "bin" / "vite.js"
 HOST = "127.0.0.1"
 API_PORT = 8100
 WEB_PORT = 5273
+SCREENSHOT_API_PORT = 8101
+SCREENSHOT_WEB_PORT = 5274
 STARTUP_TIMEOUT_S = 30
 BUILD_TIMEOUT_S = 120
 
@@ -110,8 +113,9 @@ def _start(
             cwd=ROOT,
             stdout=out,
             stderr=subprocess.STDOUT,
-            # Unbuffered, so the log is complete when a hung server times out.
-            env={**os.environ, **env, "API_PORT": str(API_PORT), "PYTHONUNBUFFERED": "1"},
+            # Unbuffered, so the log is complete when a hung server times out. The caller's env
+            # comes last, so a second preview server can proxy to a second backend.
+            env={**os.environ, "API_PORT": str(API_PORT), "PYTHONUNBUFFERED": "1", **env},
         )
     server = Server(name, process, log)
     deadline = time.monotonic() + STARTUP_TIMEOUT_S
@@ -132,42 +136,70 @@ def _start(
     )
 
 
-@pytest.fixture(scope="session")
-def servers(tmp_path_factory: pytest.TempPathFactory) -> Iterator[list[Server]]:
-    work = tmp_path_factory.mktemp("e2e")
-    dist = work / "dist"
-    # A fresh build every session, so the tests never drive a stale dist/.
-    _build_frontend(dist)
+@contextmanager
+def _serve(
+    label: str, work: Path, dist: Path, api_port: int, web_port: int
+) -> Generator[list[Server]]:
+    """A backend with its own throwaway database, and `vite preview` of `dist` proxying to it."""
     backend = [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", HOST]
     frontend = [_node(), str(VITE), "preview", "frontend", "--outDir", str(dist), "--host", HOST]
-    # A throwaway database, so the tests never touch dev data.
-    backend_env = {"TRIP_DB_PATH": str(work / "trip.db")}
     started: list[Server] = []
     try:
         started.append(
             _start(
-                "backend",
-                [*backend, "--port", str(API_PORT)],
-                API_PORT,
+                f"{label}backend",
+                [*backend, "--port", str(api_port)],
+                api_port,
                 "/api/health",
                 work,
-                backend_env,
+                # A throwaway database, so the tests never touch dev data.
+                {"TRIP_DB_PATH": str(work / "trip.db")},
             )
         )
         started.append(
             _start(
-                "frontend",
-                [*frontend, "--port", str(WEB_PORT), "--strictPort"],
-                WEB_PORT,
+                f"{label}frontend",
+                [*frontend, "--port", str(web_port), "--strictPort"],
+                web_port,
                 "/",
                 work,
-                {},
+                {"API_PORT": str(api_port)},
             )
         )
         yield started
     finally:
         for server in reversed(started):
             server.stop()
+
+
+@pytest.fixture(scope="session")
+def frontend_dist(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    dist = tmp_path_factory.mktemp("dist")
+    # A fresh build every session, so the tests never drive a stale dist/.
+    _build_frontend(dist)
+    return dist
+
+
+@pytest.fixture(scope="session")
+def servers(
+    tmp_path_factory: pytest.TempPathFactory, frontend_dist: Path
+) -> Iterator[list[Server]]:
+    with _serve("", tmp_path_factory.mktemp("e2e"), frontend_dist, API_PORT, WEB_PORT) as started:
+        yield started
+
+
+@pytest.fixture(scope="session")
+def screenshot_base_url(
+    tmp_path_factory: pytest.TempPathFactory, frontend_dist: Path
+) -> Iterator[str]:
+    """A second backend and preview server with their own database, for e2e/test_screenshots.py.
+
+    The shared E2E database collects groups from every test, which Browse would show. This one
+    holds only the screenshots' sample data, so every run pictures the same screens.
+    """
+    work = tmp_path_factory.mktemp("screenshots")
+    with _serve("screenshot-", work, frontend_dist, SCREENSHOT_API_PORT, SCREENSHOT_WEB_PORT):
+        yield f"http://{HOST}:{SCREENSHOT_WEB_PORT}"
 
 
 @pytest.fixture(scope="session")
