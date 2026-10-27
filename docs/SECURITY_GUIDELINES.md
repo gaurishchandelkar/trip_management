@@ -12,6 +12,7 @@
 - Validate all external input at the API boundary with Pydantic models and explicit constraints (lengths, ranges, patterns).
 - Return generic error messages. Never leak stack traces, file paths or internal identifiers.
 - React escapes output by default. Never use `dangerouslySetInnerHTML`.
+- Text from files, branch names, PR titles or tool output that goes into a job summary, PR comment or Markdown report is untrusted. Print only values that match a strict allowlist, such as `[\w.-]+`, and count or escape the rest.
 - *Enforced by:* integration tests for invalid input, ESLint `react/no-danger`, and the `security-reviewer` subagent.
 
 ## Code

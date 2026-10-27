@@ -46,13 +46,19 @@ Entry format:
 ## 2026-10-27: File names reached the job summary as Markdown
 - Signal: security issue
 - What happened: At `/ship`, `security-reviewer` found that `scripts/screenshot-summary.mjs` printed unexpected file names into `$GITHUB_STEP_SUMMARY` without escaping, so a crafted name could add links or headings. It was fixed in the PR: only names matching `[\w.-]+` are printed, and a test covers it. No other script writes Markdown from untrusted text today.
-- Improvement: guideline, drafted for `docs/SECURITY_GUIDELINES.md` (protected; awaiting approval): text from files, branches, PR titles or tool output that goes into a job summary, PR comment or Markdown report is untrusted. Print only values that match a strict allowlist, and count or escape the rest.
+- Improvement: guideline in `docs/SECURITY_GUIDELINES.md` (approved by the human on 2026-10-27): text from files, branches, PR titles or tool output that goes into a job summary, PR comment or Markdown report is untrusted. Print only values that match a strict allowlist, and count or escape the rest.
 - Enforced: documented only (whether text is untrusted depends on where it came from; `security-reviewer` checks it)
+
+## 2026-10-27: Open CI questions from PR #5's review
+- Signal: repeated review feedback
+- What happened: Both reviewers asked whether the screenshot steps should use `if: ${{ !cancelled() }}` instead of `if: always()`, since a run cancelled by a newer push shows red "no files" steps. `security-reviewer` also suggested pinning actions to commit SHAs.
+- Improvement: none, by choice. The human kept `if: always()` (decision D2 stands) and chose not to pin actions to SHAs; tags stay the practice across `ci.yml`.
+- Enforced: documented only (decided, so reviewers needn't raise them again)
 
 ## 2026-10-27: Commands handed to the human wrapped and failed
 - Signal: repetitive task
 - What happened: Commands the agent gave to the human to run with `!` broke five times when the terminal wrapped them: two `gh pr create` attempts that failed, a third that gave PR #3's title a newline and extra spaces, and two `git branch -d` commands that deleted only the first branch named. The `/ship` skill already says to keep its hand-over commands short, but other replies didn't.
-- Improvement: guideline, drafted for `CLAUDE.md` (protected; awaiting approval): give the human one short command per line, under 70 characters, with no `&&` chains. If a safe local command is long, offer to run it instead.
+- Improvement: guideline in `CLAUDE.md` (approved by the human on 2026-10-27): give the human one short command per line, under 70 characters, with no `&&` chains. If a safe local command is long, offer to run it instead.
 - Enforced: documented only (the terminal's width isn't known to any check)
 
 ## 2026-10-27: A coverage row rested on a manual proof without saying so
