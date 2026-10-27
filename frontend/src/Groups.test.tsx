@@ -21,6 +21,7 @@ import {
   UnavailableError,
 } from "./api";
 import { AppRoutes } from "./AppRoutes";
+import { expectTitle } from "./test-utils";
 
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
@@ -550,7 +551,7 @@ describe("group detail", () => {
     expect(await screen.findByRole("region", { name: "My groups" })).toBeInTheDocument();
     expect(getMyGroups).toHaveBeenCalledTimes(loadsBefore + 1);
     expect(browseGroups).toHaveBeenCalledTimes(browsesBefore + 1);
-    expect(document.title).toBe("Groups · Caravan");
+    await expectTitle("Groups · Caravan");
   });
 
   it("links each group to its own address and names the tab after it", async () => {
@@ -564,7 +565,7 @@ describe("group detail", () => {
     vi.mocked(getGroup).mockResolvedValue(detail());
     await userEvent.click(within(section("Browse groups")).getByRole("link", { name: "Goa 2027" }));
     await screen.findByRole("heading", { name: "Goa 2027" });
-    expect(document.title).toBe("Goa 2027 · Caravan");
+    await expectTitle("Goa 2027 · Caravan");
   });
 });
 
@@ -584,7 +585,7 @@ describe("routes", () => {
 
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Go to your groups" })).toHaveAttribute("href", "/");
-    expect(document.title).toBe("Page not found · Caravan");
+    await expectTitle("Page not found · Caravan");
     expect(getMyGroups).not.toHaveBeenCalled();
   });
 
@@ -605,7 +606,7 @@ describe("routes", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("That group no longer exists.");
     expect(screen.getByRole("link", { name: "Back to groups" })).toHaveAttribute("href", "/");
-    expect(document.title).toBe("Group not found · Caravan");
+    await expectTitle("Group not found · Caravan");
   });
 });
 

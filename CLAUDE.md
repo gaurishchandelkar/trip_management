@@ -6,3 +6,4 @@
 - **Subagents** (`.claude/agents/`): `code-reviewer` and `security-reviewer`. Run both before `/ship`.
 - **Hooks** (`.claude/settings.json`): a guard hook blocks commands and edits that break the hard lines, and a format hook formats each file you edit. If a hook blocks you, don't look for a way around it. Fix the cause, or stop and ask.
 - **Browser checks**: use the Playwright MCP server (`.mcp.json`) to check UI success criteria in a real browser.
+- **Commands for the human**: one short command per line, under 70 characters, with no `&&` chains, so the terminal can't wrap and break them. If a safe local command is long, offer to run it instead.

@@ -13,6 +13,7 @@
   - a design-token contrast test (WCAG AA, both themes) and a scan that keeps raw colours out of every stylesheet but `tokens.css` (`frontend/src/theme/tokens.test.ts`)
   - a scan that fails on any third-party URL in the frontend's sources (`frontend/src/origins.test.ts`)
   - a check that every plan's "Spec coverage" table names real tests as `path::test name` (`scripts/harness-config.test.mjs`)
+  - checks that every script CI runs has a test that spawns it (`scripts/check.test.mjs` for the pipeline), that frontend tests wait for the tab title (`expectTitle`), and that E2E browsers come from pytest-playwright's fixtures, so a failure keeps its trace (`scripts/harness-config.test.mjs`)
   - lefthook pre-commit
   - Claude Code permission rules, guard hook and format hook
 - **Verification:** `npm run check` runs build → lint → unit → integration → functional → security → architecture.
@@ -27,7 +28,7 @@
 
 ## In progress
 
-- **CI screenshot artifacts** (`docs/plans/PLAN_ci-screenshot-artifacts.md`) is in review as PR #5. Its first CI run passed and published `ui-screenshots` with all 20 images.
+- Nothing. CI screenshot artifacts (`docs/specs/ci-screenshot-artifacts.md`) merged as PR #5, and is described under **Current state** (Verification and CI).
 
 ## Known gaps
 

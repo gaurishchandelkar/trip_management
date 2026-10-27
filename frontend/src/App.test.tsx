@@ -18,6 +18,7 @@ import {
   signOut,
   UnavailableError,
 } from "./api";
+import { expectTitle } from "./test-utils";
 
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
@@ -240,7 +241,7 @@ describe("app shell", () => {
 
     const brand = screen.getByRole("heading", { level: 1, name: "Caravan" });
     expect(within(brand).getByRole("link", { name: "Caravan" })).toHaveAttribute("href", "/");
-    expect(document.title).toBe("Sign in · Caravan");
+    await expectTitle("Sign in · Caravan");
   });
 
   it("moves focus to the main content from the skip link", async () => {
@@ -259,7 +260,7 @@ describe("app shell", () => {
     const banner = screen.getByRole("banner");
     expect(await within(banner).findByText("AL")).toHaveClass("avatar");
     expect(within(banner).getByText("Signed in as")).toHaveTextContent("Signed in as Ada Lovelace");
-    expect(document.title).toBe("Groups · Caravan");
+    await expectTitle("Groups · Caravan");
   });
 
   it("keeps the address when the session ends, and returns there after signing in", async () => {
@@ -275,7 +276,7 @@ describe("app shell", () => {
     expect(getGroup).toHaveBeenCalledTimes(2);
     expect(getGroup).toHaveBeenLastCalledWith(7);
     expect(getMyGroups).not.toHaveBeenCalled();
-    expect(document.title).toBe("Goa 2027 · Caravan");
+    await expectTitle("Goa 2027 · Caravan");
   });
 
   it("starts at home after an explicit sign-out", async () => {

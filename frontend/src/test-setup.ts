@@ -18,4 +18,6 @@ if ("HTMLDialogElement" in globalThis) {
 
 afterEach(() => {
   cleanup();
+  // jsdom keeps one document per file, so a title left by the last test could pass the next one.
+  if ("document" in globalThis) document.title = "";
 });

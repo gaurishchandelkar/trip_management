@@ -33,7 +33,7 @@ Success criteria:
 
 ### Spec coverage
 
-Name each test as `path::test name`: a Python `def`, or a vitest title exactly as quoted. `scripts/harness-config.test.mjs` fails on a row that names no test, and, once Status is **Done**, on a name that matches no test.
+Name each test as `path::test name`: a Python `def`, or a vitest title exactly as quoted. `scripts/harness-config.test.mjs` fails on a row that names no test, and, once Status is **Done**, on a name that matches no test. If part of a criterion rests on a manual proof (a negative proof, a check on a real CI run), say so in the row and name the success criterion that records it.
 
 | Spec acceptance criterion | Tests |
 |---|---|
