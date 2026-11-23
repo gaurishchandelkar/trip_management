@@ -6,6 +6,7 @@ from pydantic import (
     AfterValidator,
     BaseModel,
     ConfigDict,
+    Field,
     StringConstraints,
     TypeAdapter,
     ValidationError,
@@ -17,6 +18,8 @@ from backend.domain.models import (
     JoinRequest,
     Member,
     MembershipStatus,
+    PendingRequest,
+    Person,
     RequestStatus,
 )
 
@@ -147,6 +150,7 @@ class GroupResponse(BaseModel):
     group_id: int
     name: str
     description: str
+    owner_user_id: str
     owner_display_name: str
     member_count: int
     my_status: MembershipStatus
@@ -157,25 +161,41 @@ class GroupResponse(BaseModel):
             group_id=summary.group_id,
             name=summary.name,
             description=summary.description,
+            owner_user_id=summary.owner_id,
             owner_display_name=summary.owner_display_name,
             member_count=summary.member_count,
             my_status=summary.my_status,
         )
 
 
-class MemberNameResponse(BaseModel):
-    # No user_id: until passwords are checked (spec D1), a user ID is enough to sign in.
+class PersonResponse(BaseModel):
+    user_id: str
     display_name: str
+    # Only the group's owner gets it; for anyone else the key isn't in the JSON at all.
+    mobile: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @classmethod
+    def of(cls, person: Person) -> "PersonResponse":
+        return cls(user_id=person.user_id, display_name=person.display_name, mobile=person.mobile)
 
 
-class PendingRequestResponse(BaseModel):
+class PendingRequestResponse(PersonResponse):
     request_id: int
-    display_name: str
+
+    @classmethod
+    def of_request(cls, request: PendingRequest) -> "PendingRequestResponse":
+        requester = request.requester
+        return cls(
+            request_id=request.request_id,
+            user_id=requester.user_id,
+            display_name=requester.display_name,
+            mobile=requester.mobile,
+        )
 
 
 class GroupDetailResponse(GroupResponse):
     # null when the viewer may not see the list.
-    members: list[MemberNameResponse] | None
+    members: list[PersonResponse] | None
     pending_requests: list[PendingRequestResponse] | None
 
     @classmethod
@@ -184,15 +204,10 @@ class GroupDetailResponse(GroupResponse):
         pending = detail.pending_requests
         return cls(
             **GroupResponse.of(detail.summary).model_dump(),
-            members=None
-            if members is None
-            else [MemberNameResponse(display_name=m.display_name) for m in members],
+            members=None if members is None else [PersonResponse.of(m) for m in members],
             pending_requests=None
             if pending is None
-            else [
-                PendingRequestResponse(request_id=p.request_id, display_name=p.display_name)
-                for p in pending
-            ],
+            else [PendingRequestResponse.of_request(p) for p in pending],
         )
 
 

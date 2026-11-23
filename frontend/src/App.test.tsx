@@ -124,6 +124,7 @@ describe("app shell", () => {
     group_id: 7,
     name: "Goa 2027",
     description: "",
+    owner_user_id: "ada",
     owner_display_name: "Ada",
     member_count: 1,
     my_status: "owner",
@@ -156,6 +157,20 @@ describe("app shell", () => {
     expect(await within(banner).findByText("AL")).toHaveClass("avatar");
     expect(within(banner).getByText("Signed in as")).toHaveTextContent("Signed in as Ada Lovelace");
     await expectTitle("Groups · Caravan");
+  });
+
+  it("shows the display name with the user ID beneath", async () => {
+    vi.mocked(getMe).mockResolvedValue(ADA);
+
+    renderApp();
+
+    const name = await screen.findByText("Ada Lovelace", { selector: "strong" });
+    const userId = screen.getByText("@ada");
+    expect(userId).toHaveClass("app-header__user-id");
+    expect(name.parentElement).toBe(userId.parentElement);
+    // Initials come from the display name, never the user ID.
+    expect(screen.getByText("AL")).toHaveClass("avatar");
+    expect(screen.queryByText("+919876543210")).toBeNull();
   });
 
   it("keeps the address when the session ends, so signing in returns there", async () => {

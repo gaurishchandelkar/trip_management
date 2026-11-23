@@ -32,6 +32,7 @@ from e2e.app import (
     sign_in_panel,
     sign_in_with_google,
     sign_out,
+    sign_up,
     small_targets,
     to_google,
     unique_group_name,
@@ -185,14 +186,15 @@ def test_owner_approves_a_member_who_found_the_group_by_browsing(
 ) -> None:
     ada, bob = page, other_page
     name = unique_group_name("Goa")
-    register_and_sign_in(ada, unique_user_id("ada"), "Ada")
+    ada_id = unique_user_id("ada")
+    register_and_sign_in(ada, ada_id, "Ada")
     create_group(ada, name, "Beach week")
     expect(section(ada, "My groups").get_by_role("link", name=name)).to_be_visible()
 
     register_and_sign_in(bob, unique_user_id("bob"), "Bob")
     search_groups(bob, name)
     browse = section(bob, "Browse groups")
-    expect(browse.get_by_text("by Ada, 1 member")).to_be_visible()
+    expect(browse.get_by_text(f"by Ada (@{ada_id}), 1 member")).to_be_visible()
     with bob.expect_response(lambda r: r.url.endswith("/join-requests")):
         browse.get_by_role("button", name=f"Request to join {name}").click()
     expect(browse.get_by_text("Request pending")).to_be_visible()
@@ -210,6 +212,40 @@ def test_owner_approves_a_member_who_found_the_group_by_browsing(
     expect(section(bob, "Members")).to_contain_text("Ada")
     expect(section(bob, "Members")).to_contain_text("Bob")
     expect(section(bob, "Pending requests")).to_have_count(0)
+
+
+def test_owner_sees_the_requesters_user_id_and_phone(page: Page, other_page: Page) -> None:
+    ada, bob = page, other_page
+    name = unique_group_name("Goa")
+    ada_id, bob_id = unique_user_id("ada"), unique_user_id("bob")
+    register_and_sign_in(ada, ada_id, "Ada")
+    create_group(ada, name)
+    load_signed_out(bob)
+    sign_up(bob, bob_id, "Bob", mobile="+44 7700 900123")
+    search_groups(bob, name)
+    with bob.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(bob, "Browse groups").get_by_role("button", name=f"Request to join {name}").click()
+
+    open_group(ada, "My groups", name)
+    pending = section(ada, "Pending requests")
+    expect(pending).to_contain_text(f"@{bob_id}")
+    phone = pending.get_by_role("link", name=re.compile("^Call Bob"))
+    expect(phone).to_have_attribute("href", "tel:+447700900123")
+    expect(phone).to_have_text("+447700900123")
+    with ada.expect_response(lambda r: r.url.endswith("/approve")):
+        pending.get_by_role("button", name=f"Approve Bob (@{bob_id})").click()
+    expect(
+        section(ada, "Members").get_by_role("link", name=re.compile("^Call Bob"))
+    ).to_be_visible()
+
+    # Bob, now a member but not the owner, sees who's in by name and user ID, with no numbers.
+    load_home(bob)
+    open_group(bob, "My groups", name)
+    members = section(bob, "Members")
+    expect(members).to_contain_text(f"@{ada_id}")
+    expect(members).to_contain_text(f"@{bob_id}")
+    expect(bob.locator('a[href^="tel:"]')).to_have_count(0)
+    expect(bob.get_by_text(f"Owner: Ada (@{ada_id}).")).to_be_visible()
 
 
 def test_owner_rejects_a_request_made_by_name(page: Page, other_page: Page) -> None:

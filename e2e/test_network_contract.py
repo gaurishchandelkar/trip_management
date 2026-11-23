@@ -396,6 +396,50 @@ def test_decision_posts_once_then_reloads_the_group(
     assert reloaded["pending_requests"] == []
 
 
+def _keys(value: object) -> set[str]:
+    """Every key anywhere in a JSON body."""
+    if isinstance(value, dict):
+        items = cast(dict[str, object], value)
+        return set(items) | {key for item in items.values() for key in _keys(item)}
+    if isinstance(value, list):
+        return {key for item in cast(list[object], value) for key in _keys(item)}
+    return set()
+
+
+@covers("test_owner_sees_the_requesters_user_id_and_phone")
+def test_member_group_detail_has_no_mobile(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    owner, member = other_page, page
+    name = _owned_group(owner)
+    member_id = unique_user_id("bob")
+    register_and_sign_in(member, member_id, "Bob")
+    search_groups(member, name)
+    with member.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(member, "Browse groups").get_by_role(
+            "button", name=f"Request to join {name}"
+        ).click()
+    open_group(owner, "My groups", name)
+    with owner.expect_response(lambda r: r.url.endswith("/approve")):
+        section(owner, "Pending requests").get_by_role("button", name="Approve Bob").click()
+    load_home(member)
+    before = len(traffic.api_calls())
+
+    open_group(member, "My groups", name)
+
+    calls = traffic.api_calls()[before:]
+    assert len(calls) == 1, traffic.describe()
+    body = _json_object(calls[0])
+    assert "mobile" not in _keys(body), body
+    members = cast(list[dict[str, object]], body["members"])
+    assert {m["user_id"] for m in members} == {body["owner_user_id"], member_id}
+    assert body["pending_requests"] is None
+    # Nothing the member's browser received carries a mobile number.
+    for call in traffic.api_calls():
+        if call.path != "/api/me":
+            assert "mobile" not in _keys(call.json() if call.body else None), call.url
+
+
 @covers("test_taken_user_id_says_so_and_keeps_the_input")
 def test_taken_user_id_gets_one_generic_409(
     page: Page, other_page: Page, traffic: ApiTraffic

@@ -98,17 +98,31 @@ class GroupSummary:
 
 
 @dataclass(frozen=True)
+class Person:
+    """A member as someone else sees them. `mobile` is None unless the viewer may see it."""
+
+    user_id: str
+    display_name: str
+    mobile: str | None
+
+
+@dataclass(frozen=True)
 class PendingRequest:
     request_id: int
-    display_name: str
+    requester: Person
 
 
 @dataclass(frozen=True)
 class GroupDetail:
     summary: GroupSummary
     # None means the viewer may not see the list, which differs from an empty list.
-    members: tuple[Member, ...] | None
+    members: tuple[Person, ...] | None
     pending_requests: tuple[PendingRequest, ...] | None
+
+
+def can_see_mobiles(viewer_status: MembershipStatus) -> bool:
+    """Only a group's owner sees the mobile numbers of its members and requesters (spec D7)."""
+    return viewer_status == MembershipStatus.OWNER
 
 
 @dataclass(frozen=True)

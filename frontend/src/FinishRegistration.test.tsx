@@ -124,6 +124,7 @@ describe("finishing registration", () => {
       group_id: 7,
       name: "Goa 2027",
       description: "",
+      owner_user_id: "bob",
       owner_display_name: "Bob",
       member_count: 1,
       my_status: "none",

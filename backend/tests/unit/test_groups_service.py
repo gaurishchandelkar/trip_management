@@ -17,7 +17,10 @@ from backend.domain.models import (
     MAX_PENDING_REQUESTS,
     Member,
     MembershipStatus,
+    PendingRequest,
+    Person,
     RequestStatus,
+    can_see_mobiles,
 )
 from backend.services import groups
 from backend.storage.store import Store
@@ -131,7 +134,8 @@ def test_approve_adds_the_member(store: Store, goa: int) -> None:
     assert decided.status == RequestStatus.APPROVED
     detail = groups.group_detail(store, BOB, goa)
     assert detail.summary.my_status == MembershipStatus.MEMBER
-    assert detail.members == (ADA, BOB)
+    # A member who isn't the owner sees who's in, without mobile numbers.
+    assert detail.members == (Person("ada", "Ada", None), Person("bob", "Bob", None))
     assert detail.pending_requests is None
 
 
@@ -192,9 +196,23 @@ def test_group_detail_by_viewer(store: Store, goa: int) -> None:
     owner = groups.group_detail(store, ADA, goa)
     outsider = groups.group_detail(store, CAROL, goa)
 
-    assert owner.members == (ADA,)
-    assert owner.pending_requests is not None
-    assert [p.request_id for p in owner.pending_requests] == [request.request_id]
+    assert owner.members == (Person("ada", "Ada", MOBILE),)
+    assert owner.pending_requests == (
+        PendingRequest(request.request_id, Person("bob", "Bob", MOBILE)),
+    )
     assert (outsider.members, outsider.pending_requests) == (None, None)
     with pytest.raises(NotFoundError):
         groups.group_detail(store, ADA, 999)
+
+
+@pytest.mark.parametrize(
+    ("status", "sees"),
+    [
+        (MembershipStatus.OWNER, True),
+        (MembershipStatus.MEMBER, False),
+        (MembershipStatus.PENDING, False),
+        (MembershipStatus.NONE, False),
+    ],
+)
+def test_only_the_owner_sees_mobile_numbers(status: MembershipStatus, sees: bool) -> None:
+    assert can_see_mobiles(status) is sees

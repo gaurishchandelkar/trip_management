@@ -18,7 +18,9 @@ from backend.domain.models import (
     JoinRequest,
     Member,
     MembershipStatus,
+    Person,
     RequestStatus,
+    can_see_mobiles,
 )
 from backend.storage.store import Store, Transaction
 
@@ -55,16 +57,28 @@ def browse_groups(store: Store, actor: Member, search: str | None) -> list[Group
 
 
 def group_detail(store: Store, actor: Member, group_id: int) -> GroupDetail:
-    """Everyone signed in sees the summary; members see who's in; the owner sees requests too."""
+    """Everyone signed in sees the summary; members see who's in; the owner sees requests too.
+
+    Mobile numbers are left out for everyone but the owner.
+    """
     with store.transaction() as tx:
         summary = _summary(tx, group_id, actor)
         in_group = summary.my_status in IN_GROUP
         owner = summary.my_status == MembershipStatus.OWNER
-        return GroupDetail(
-            summary=summary,
-            members=tx.group_members(group_id) if in_group else None,
-            pending_requests=tx.pending_requests(group_id) if owner else None,
-        )
+        members = tx.group_members(group_id) if in_group else None
+        pending = tx.pending_requests(group_id) if owner else None
+    mobiles = can_see_mobiles(summary.my_status)
+
+    def shown(person: Person) -> Person:
+        return person if mobiles else replace(person, mobile=None)
+
+    return GroupDetail(
+        summary=summary,
+        members=None if members is None else tuple(shown(m) for m in members),
+        pending_requests=None
+        if pending is None
+        else tuple(replace(p, requester=shown(p.requester)) for p in pending),
+    )
 
 
 def _request_to_join(tx: Transaction, actor: Member, group_id: int) -> JoinRequest:

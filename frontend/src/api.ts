@@ -144,20 +144,24 @@ export interface Group {
   group_id: number;
   name: string;
   description: string;
+  owner_user_id: string;
   owner_display_name: string;
   member_count: number;
   my_status: MembershipStatus;
 }
 
-export interface PendingRequest {
-  request_id: number;
+/** Someone in a group's lists. `mobile` is there only when the viewer owns the group. */
+export interface Person {
+  user_id: string;
   display_name: string;
+  mobile?: string;
 }
 
-/** Co-members are shown by name only: until passwords are checked, a user ID signs you in. */
-export interface GroupMember {
-  display_name: string;
+export interface PendingRequest extends Person {
+  request_id: number;
 }
+
+export type GroupMember = Person;
 
 export interface GroupDetail extends Group {
   /** null when the viewer may not see the list. */

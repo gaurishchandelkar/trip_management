@@ -9,6 +9,7 @@ import { SignedOut } from "./SignedOut";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { Logo } from "./ui/Logo";
+import { userIdLabel } from "./ui/PersonDetails";
 import { Skeleton } from "./ui/Skeleton";
 import { PRODUCT_NAME, useDocumentTitle } from "./useDocumentTitle";
 
@@ -36,6 +37,7 @@ function SessionMenu({ member, onSignedOut }: { member: Member; onSignedOut: () 
       <Avatar name={member.display_name} />
       <p className="app-header__name">
         Signed in as <strong>{member.display_name}</strong>
+        <span className="app-header__user-id">{userIdLabel(member.user_id)}</span>
       </p>
       <Button
         variant="ghost"

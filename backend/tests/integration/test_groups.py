@@ -1,6 +1,6 @@
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI
@@ -65,6 +65,7 @@ def test_create_group_makes_the_creator_owner_and_sole_member(signed_in: SignedI
         "group_id": body["group_id"],
         "name": "Goa 2027",
         "description": "Beach week",
+        "owner_user_id": "ada",
         "owner_display_name": "Ada",
         "member_count": 1,
         "my_status": "owner",
@@ -290,8 +291,10 @@ def test_the_owner_sees_members_and_pending_requests(signed_in: SignedIn) -> Non
 
     body = detail(ada, goa)
 
-    assert body["members"] == [{"display_name": "Ada"}]
-    assert body["pending_requests"] == [{"request_id": request_id, "display_name": "Bob"}]
+    assert body["members"] == [{"user_id": "ada", "display_name": "Ada", "mobile": MOBILE}]
+    assert body["pending_requests"] == [
+        {"request_id": request_id, "user_id": "bob", "display_name": "Bob", "mobile": MOBILE}
+    ]
 
 
 def test_a_member_sees_members_but_not_requests(signed_in: SignedIn) -> None:
@@ -302,7 +305,10 @@ def test_a_member_sees_members_but_not_requests(signed_in: SignedIn) -> None:
 
     body = detail(bob, goa)
 
-    assert body["members"] == [{"display_name": "Ada"}, {"display_name": "Bob"}]
+    assert body["members"] == [
+        {"user_id": "ada", "display_name": "Ada"},
+        {"user_id": "bob", "display_name": "Bob"},
+    ]
     assert body["pending_requests"] is None
 
 
@@ -367,7 +373,7 @@ def test_only_the_owner_can_decide(signed_in: SignedIn, decision: str) -> None:
         assert response.status_code == 403
         assert response.json() == FORBIDDEN
     assert detail(ada, goa)["pending_requests"] == [
-        {"request_id": request_id, "display_name": "Carol"}
+        {"request_id": request_id, "user_id": "carol", "display_name": "Carol", "mobile": MOBILE}
     ]
 
 
@@ -473,3 +479,91 @@ def test_browse_search_and_detail_stay_fast_with_1000_groups(
         elapsed = time.perf_counter() - started
         assert response.status_code == 200
         assert elapsed < BUDGET_S, f"{path} {params} took {elapsed * 1000:.0f} ms"
+
+
+# People: user IDs everywhere, mobile numbers for the owner only (spec D7, D9)
+
+
+def keys(value: object) -> set[str]:
+    """Every key anywhere in a JSON body."""
+    if isinstance(value, dict):
+        items = cast(dict[str, object], value)
+        return set(items) | {key for item in items.values() for key in keys(item)}
+    if isinstance(value, list):
+        return {key for item in cast(list[object], value) for key in keys(item)}
+    return set()
+
+
+def test_owner_sees_mobiles_of_members_and_requesters(signed_in: SignedIn) -> None:
+    ada, bob, carol = signed_in("ada"), signed_in("bob"), signed_in("carol")
+    goa = create_id(ada)
+    ada.post(f"/api/join-requests/{ask_id(bob, goa)}/approve")
+    request_id = ask_id(carol, goa)
+
+    body = detail(ada, goa)
+
+    assert body["members"] == [
+        {"user_id": "ada", "display_name": "Ada", "mobile": MOBILE},
+        {"user_id": "bob", "display_name": "Bob", "mobile": MOBILE},
+    ]
+    assert body["pending_requests"] == [
+        {"request_id": request_id, "user_id": "carol", "display_name": "Carol", "mobile": MOBILE}
+    ]
+
+
+def test_members_never_receive_a_mobile(signed_in: SignedIn) -> None:
+    ada, bob, carol = signed_in("ada"), signed_in("bob"), signed_in("carol")
+    goa = create_id(ada)
+    ada.post(f"/api/join-requests/{ask_id(bob, goa)}/approve")
+    ask_id(carol, goa)
+
+    for viewer in (bob, carol):
+        body = detail(viewer, goa)
+        assert "mobile" not in keys(body), body
+        assert MOBILE not in str(body)
+
+
+def test_lists_and_requests_never_contain_a_mobile(signed_in: SignedIn) -> None:
+    ada, bob = signed_in("ada"), signed_in("bob")
+    goa = create_id(ada, "Goa 2027")
+    by_id = ask(bob, goa)
+    create_id(ada, "Ladakh")
+    by_name = bob.post("/api/join-requests", json={"group_name": "ladakh"})
+    approved = ada.post(f"/api/join-requests/{by_id.json()['request_id']}/approve")
+
+    responses = [
+        create(ada, "Kerala"),
+        by_id,
+        by_name,
+        approved,
+        ada.get("/api/groups"),
+        ada.get("/api/groups", params={"q": "goa"}),
+        ada.get("/api/me/groups"),
+        bob.get("/api/me/groups"),
+    ]
+
+    for response in responses:
+        assert response.status_code in {200, 201}, response.text
+        assert "mobile" not in keys(response.json()), response.json()
+
+
+def test_people_carry_their_user_id(signed_in: SignedIn) -> None:
+    ada, bob = signed_in("ada"), signed_in("bob")
+    goa = create_id(ada)
+    ada.post(f"/api/join-requests/{ask_id(bob, goa)}/approve")
+
+    members = detail(bob, goa)["members"]
+
+    assert [(m["user_id"], m["display_name"]) for m in members] == [("ada", "Ada"), ("bob", "Bob")]
+
+
+def test_groups_carry_the_owner_user_id(signed_in: SignedIn) -> None:
+    ada, bob = signed_in("ada"), signed_in("bob")
+    goa = create_id(ada)
+
+    for body in (
+        *bob.get("/api/groups").json(),
+        *ada.get("/api/me/groups").json(),
+        detail(bob, goa),
+    ):
+        assert (body["owner_user_id"], body["owner_display_name"]) == ("ada", "Ada")

@@ -37,6 +37,7 @@ from backend.domain.models import (
     MembershipStatus,
     PendingRegistration,
     PendingRequest,
+    Person,
     RequestStatus,
     Session,
     SignInFlow,
@@ -312,14 +313,14 @@ class Transaction:
         query = _summaries(user_id).where(_is_member(user_id)).order_by(groups.c.name_key)
         return [_summary(row) for row in self._connection.execute(query).mappings()]
 
-    def group_members(self, group_id: int) -> tuple[Member, ...]:
+    def group_members(self, group_id: int) -> tuple[Person, ...]:
         rows = self._connection.execute(
             select(members.c.user_id, members.c.display_name, members.c.mobile)
             .join(memberships, memberships.c.user_id == members.c.user_id)
             .where(memberships.c.group_id == group_id)
             .order_by(members.c.display_name, members.c.user_id)
         )
-        return tuple(_member(row) for row in rows)
+        return tuple(Person(r.user_id, r.display_name, r.mobile) for r in rows)
 
     def add_membership(self, group_id: int, user_id: str) -> None:
         self._connection.execute(insert(memberships).values(group_id=group_id, user_id=user_id))
@@ -371,7 +372,12 @@ class Transaction:
 
     def pending_requests(self, group_id: int) -> tuple[PendingRequest, ...]:
         rows = self._connection.execute(
-            select(join_requests.c.request_id, members.c.display_name)
+            select(
+                join_requests.c.request_id,
+                members.c.user_id,
+                members.c.display_name,
+                members.c.mobile,
+            )
             .join(members, members.c.user_id == join_requests.c.user_id)
             .where(
                 join_requests.c.group_id == group_id,
@@ -380,7 +386,11 @@ class Transaction:
             .order_by(join_requests.c.request_id)
         )
         return tuple(
-            PendingRequest(request_id=r.request_id, display_name=r.display_name) for r in rows
+            PendingRequest(
+                request_id=r.request_id,
+                requester=Person(user_id=r.user_id, display_name=r.display_name, mobile=r.mobile),
+            )
+            for r in rows
         )
 
     def decide_request(self, request_id: int, status: RequestStatus) -> bool:

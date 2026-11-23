@@ -10,7 +10,14 @@ from backend.domain.errors import (
     StorageUnavailableError,
     UserIdTakenError,
 )
-from backend.domain.models import Member, MembershipStatus, RequestStatus, Session
+from backend.domain.models import (
+    Member,
+    MembershipStatus,
+    PendingRequest,
+    Person,
+    RequestStatus,
+    Session,
+)
 from backend.storage.store import OutdatedDatabaseError, Store
 
 MOBILE = "+919876543210"
@@ -187,13 +194,13 @@ def test_group_lookups_members_and_pending_requests(store: Store) -> None:
         assert tx.find_group_id("GOA") == goa
         assert tx.find_group_id("Nowhere") is None
         assert tx.group_summary(goa + 1, "ada") is None
-        assert tx.group_members(goa) == (ADA,)
+        assert tx.group_members(goa) == (Person("ada", "Ada Lovelace", MOBILE),)
         assert tx.count_owned_groups("ada") == 1
         assert tx.count_pending_requests("bob") == 1
         assert tx.get_pending_request(request.request_id) == request
-        assert [(p.request_id, p.display_name) for p in tx.pending_requests(goa)] == [
-            (request.request_id, "Bob")
-        ]
+        assert tx.pending_requests(goa) == (
+            PendingRequest(request.request_id, Person("bob", "Bob", MOBILE)),
+        )
 
 
 def test_storage_errors_never_carry_the_bound_values(store: Store) -> None:

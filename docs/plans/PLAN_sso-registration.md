@@ -251,15 +251,17 @@ Deviations:
   - Approve and Reject `aria-label`s read "Approve Ada Lovelace (@ada)".
 
 Success criteria:
-- [ ] Integration tests (`test_groups.py`):
+- [x] Integration tests (`test_groups.py`):
   - the owner's detail has `mobile` for each member and requester;
   - a member's detail, a non-member's detail, browse, my-groups and join-request responses contain no `mobile` key anywhere (a recursive key search);
   - every summary has `owner_user_id`.
-- [ ] Unit tests (`test_groups_service.py`): `can_see_mobile` for owner, member, requester and stranger.
-- [ ] Vitest: the banner shows the name and `@ada`; the cards show `(@ada)`; owner rows have `tel:+919876543210` links and the buttons are labelled with the name and ID; a member's view has no `tel:` link; two "Ada"s are told apart by `@id`.
-- [ ] `frontend/src/theme/tokens.test.ts` still passes with the muted `@id` colour in both themes.
-- [ ] E2E outside: the owner sees the requester's `@id` and phone link, and the requester, once a member, sees `@id` but no phone link. E2E inside: the member's `GET /api/groups/<id>` body has no `mobile`.
-- [ ] `npm run check` passes.
+- [x] Unit tests (`test_groups_service.py`): `can_see_mobile` for owner, member, requester and stranger. *`test_only_the_owner_sees_mobile_numbers`; the rule is `can_see_mobiles(viewer_status)` in `backend/domain/models.py`, applied in `services/groups.py::group_detail`.*
+- [x] Vitest: the banner shows the name and `@ada`; the cards show `(@ada)`; owner rows have `tel:+919876543210` links and the buttons are labelled with the name and ID; a member's view has no `tel:` link; two "Ada"s are told apart by `@id`.
+- [x] `frontend/src/theme/tokens.test.ts` still passes with the muted `@id` colour in both themes. *`@id` uses the existing `--color-text-muted`, already in the contrast pairs on `--color-bg` and `--color-surface`; no new colour.*
+- [x] E2E outside: the owner sees the requester's `@id` and phone link, and the requester, once a member, sees `@id` but no phone link. E2E inside: the member's `GET /api/groups/<id>` body has no `mobile`.
+
+Deviations: people in group detail are a new domain type, `Person(user_id, display_name, mobile | None)`, and `PendingRequest` carries one as `requester`. `mobile` is left out of the JSON with pydantic's field-level `exclude_if` (pydantic 2.14), because `exclude_none` on the route would also drop `members: null`. The shared rendering is `frontend/src/ui/PersonDetails.tsx`; phone links are labelled "Call Ada (@ada) on +91…".
+- [x] `npm run check` passes. *All 7 stages: 151 backend unit (90% coverage), 251 vitest, 156 integration, 71 E2E.*
 
 ## Phase 5: Profile editing, screenshots and docs
 
