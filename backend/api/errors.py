@@ -4,6 +4,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from backend.domain.errors import (
+    AccountAlreadyLinkedError,
     AlreadyMemberError,
     DomainError,
     ForbiddenError,
@@ -25,6 +26,7 @@ ERROR_RESPONSES: dict[type[DomainError], tuple[int, str]] = {
     GroupNameTakenError: (409, "Group name already taken"),
     RequestAlreadyPendingError: (409, "Request already pending"),
     AlreadyMemberError: (409, "Already a member"),
+    AccountAlreadyLinkedError: (409, "Account already linked"),
     LimitReachedError: (409, "Limit reached"),
     NotFoundError: (404, "Not found"),
     ForbiddenError: (403, "Forbidden"),

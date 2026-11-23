@@ -28,7 +28,7 @@ def test_register_creates_a_member(client: TestClient) -> None:
     response = register(client)
 
     assert response.status_code == 201
-    assert response.json() == {"user_id": "ada", "display_name": "Ada Lovelace"}
+    assert response.json() == {"user_id": "ada", "display_name": "Ada Lovelace", "mobile": None}
 
 
 @pytest.mark.parametrize("again", ["ada", "ADA", "Ada"])
@@ -81,7 +81,7 @@ def test_sign_in_starts_a_session(client: TestClient) -> None:
     response = sign_in(client)
 
     assert response.status_code == 200
-    assert response.json() == {"user_id": "ada", "display_name": "Ada Lovelace"}
+    assert response.json() == {"user_id": "ada", "display_name": "Ada Lovelace", "mobile": None}
     cookie = response.headers["set-cookie"]
     assert cookie.startswith("session=")
     assert "HttpOnly" in cookie
@@ -90,7 +90,7 @@ def test_sign_in_starts_a_session(client: TestClient) -> None:
     assert "Max-Age=604800" in cookie
     me = client.get("/api/me")
     assert me.status_code == 200
-    assert me.json() == {"user_id": "ada", "display_name": "Ada Lovelace"}
+    assert me.json() == {"user_id": "ada", "display_name": "Ada Lovelace", "mobile": None}
 
 
 def test_sign_in_ignores_user_id_case(client: TestClient) -> None:

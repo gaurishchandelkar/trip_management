@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlalchemy import (
     ColumnElement,
     Connection,
+    Row,
     RowMapping,
     case,
     create_engine,
@@ -22,6 +23,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.pool import NullPool
 
 from backend.domain.errors import (
+    AccountAlreadyLinkedError,
     GroupNameTakenError,
     RequestAlreadyPendingError,
     StorageUnavailableError,
@@ -32,12 +34,24 @@ from backend.domain.models import (
     JoinRequest,
     Member,
     MembershipStatus,
+    PendingRegistration,
     PendingRequest,
     RequestStatus,
     Session,
+    SignInFlow,
     name_key,
 )
-from backend.storage.schema import groups, join_requests, members, memberships, metadata, sessions
+from backend.storage.schema import (
+    groups,
+    identities,
+    join_requests,
+    members,
+    memberships,
+    metadata,
+    pending_registrations,
+    sessions,
+    sign_in_flows,
+)
 
 BUSY_TIMEOUT_S = 5
 
@@ -96,16 +110,121 @@ class Transaction:
     def add_member(self, member: Member) -> None:
         try:
             self._connection.execute(
-                insert(members).values(user_id=member.user_id, display_name=member.display_name)
+                insert(members).values(
+                    user_id=member.user_id,
+                    display_name=member.display_name,
+                    mobile=member.mobile,
+                )
             )
         except IntegrityError as exc:
             raise UserIdTakenError from exc
 
     def get_member(self, user_id: str) -> Member | None:
         row = self._connection.execute(
-            select(members.c.user_id, members.c.display_name).where(members.c.user_id == user_id)
+            select(members.c.user_id, members.c.display_name, members.c.mobile).where(
+                members.c.user_id == user_id
+            )
         ).first()
-        return Member(user_id=row.user_id, display_name=row.display_name) if row else None
+        return _member(row) if row else None
+
+    # Provider accounts
+
+    def add_identity(self, provider: str, subject: str, user_id: str) -> None:
+        try:
+            self._connection.execute(
+                insert(identities).values(provider=provider, subject=subject, user_id=user_id)
+            )
+        except IntegrityError as exc:
+            raise AccountAlreadyLinkedError from exc
+
+    def member_for_identity(self, provider: str, subject: str) -> Member | None:
+        row = self._connection.execute(
+            select(members.c.user_id, members.c.display_name, members.c.mobile)
+            .join(identities, identities.c.user_id == members.c.user_id)
+            .where(identities.c.provider == provider, identities.c.subject == subject)
+        ).first()
+        return _member(row) if row else None
+
+    # Sign-ins waiting for the provider, and registrations waiting for a user ID
+
+    def delete_expired_sign_ins(self, now: datetime) -> None:
+        cutoff = _timestamp(now)
+        self._connection.execute(delete(sign_in_flows).where(sign_in_flows.c.expires_at <= cutoff))
+        self._connection.execute(
+            delete(pending_registrations).where(pending_registrations.c.expires_at <= cutoff)
+        )
+
+    def count_sign_in_flows(self) -> int:
+        query = select(func.count()).select_from(sign_in_flows)
+        return self._connection.execute(query).scalar_one()
+
+    def count_pending_registrations(self) -> int:
+        query = select(func.count()).select_from(pending_registrations)
+        return self._connection.execute(query).scalar_one()
+
+    def add_sign_in_flow(self, flow: SignInFlow) -> None:
+        self._connection.execute(
+            insert(sign_in_flows).values(
+                flow_hash=flow.flow_hash,
+                provider=flow.provider,
+                state_hash=flow.state_hash,
+                nonce=flow.nonce,
+                code_verifier=flow.code_verifier,
+                return_to=flow.return_to,
+                expires_at=_timestamp(flow.expires_at),
+            )
+        )
+
+    def take_sign_in_flow(self, flow_hash: str) -> SignInFlow | None:
+        """Removes and returns the flow, so it can be used only once."""
+        row = self._connection.execute(
+            delete(sign_in_flows)
+            .where(sign_in_flows.c.flow_hash == flow_hash)
+            .returning(*sign_in_flows.c)
+        ).first()
+        if row is None:
+            return None
+        return SignInFlow(
+            flow_hash=row.flow_hash,
+            provider=row.provider,
+            state_hash=row.state_hash,
+            nonce=row.nonce,
+            code_verifier=row.code_verifier,
+            return_to=row.return_to,
+            expires_at=datetime.fromtimestamp(row.expires_at, UTC),
+        )
+
+    def add_pending_registration(self, pending: PendingRegistration) -> None:
+        self._connection.execute(
+            insert(pending_registrations).values(
+                token_hash=pending.token_hash,
+                provider=pending.provider,
+                subject=pending.subject,
+                suggested_name=pending.suggested_name,
+                return_to=pending.return_to,
+                expires_at=_timestamp(pending.expires_at),
+            )
+        )
+
+    def get_pending_registration(self, token_hash: str) -> PendingRegistration | None:
+        row = self._connection.execute(
+            select(pending_registrations).where(pending_registrations.c.token_hash == token_hash)
+        ).first()
+        if row is None:
+            return None
+        return PendingRegistration(
+            token_hash=row.token_hash,
+            provider=row.provider,
+            subject=row.subject,
+            suggested_name=row.suggested_name,
+            return_to=row.return_to,
+            expires_at=datetime.fromtimestamp(row.expires_at, UTC),
+        )
+
+    def delete_pending_registration(self, token_hash: str) -> None:
+        self._connection.execute(
+            delete(pending_registrations).where(pending_registrations.c.token_hash == token_hash)
+        )
 
     # Sessions
 
@@ -114,7 +233,7 @@ class Transaction:
             insert(sessions).values(
                 token_hash=session.token_hash,
                 user_id=session.user_id,
-                expires_at=int(session.expires_at.timestamp()),
+                expires_at=_timestamp(session.expires_at),
             )
         )
 
@@ -256,6 +375,15 @@ class Transaction:
             .values(status=status)
         )
         return result.rowcount == 1
+
+
+def _timestamp(moment: datetime) -> int:
+    # Unix seconds: SQLite has no timezone-aware datetime type.
+    return int(moment.timestamp())
+
+
+def _member(row: Row[str, str, str | None]) -> Member:
+    return Member(user_id=row.user_id, display_name=row.display_name, mobile=row.mobile)
 
 
 def _is_member(user_id: str) -> ColumnElement[bool]:

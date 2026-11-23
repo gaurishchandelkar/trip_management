@@ -1,7 +1,15 @@
+import re
 import unicodedata
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    StringConstraints,
+    TypeAdapter,
+    ValidationError,
+)
 
 from backend.domain.models import (
     GroupDetail,
@@ -40,6 +48,33 @@ DisplayName = Annotated[
 ]
 Password = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
+# International format: "+", a country code that doesn't start with 0, 8 to 15 digits in all.
+MOBILE_PATTERN = re.compile(r"\+[1-9][0-9]{7,14}")
+MOBILE_INPUT_MAX_LENGTH = 20
+
+
+def _normalized_mobile(value: str) -> str:
+    # Spaces and hyphens are how people group digits; the number itself is stored without them.
+    number = value.replace(" ", "").replace("-", "")
+    if not MOBILE_PATTERN.fullmatch(number):
+        raise ValueError
+    return number
+
+
+Mobile = Annotated[
+    str,
+    StringConstraints(max_length=MOBILE_INPUT_MAX_LENGTH),
+    AfterValidator(_normalized_mobile),
+]
+
+
+def suggested_display_name(name: str) -> str:
+    """The provider's name if it passes the display-name rule, otherwise empty."""
+    try:
+        return TypeAdapter(DisplayName).validate_python(name)
+    except ValidationError:
+        return ""
+
 
 class RequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -56,13 +91,31 @@ class SignIn(RequestBody):
     password: Password
 
 
+class CompleteRegistration(RequestBody):
+    user_id: UserId
+    display_name: DisplayName
+    mobile: Mobile
+
+
 class MemberResponse(BaseModel):
+    """The signed-in member, about themselves. Only they ever see their own mobile here."""
+
     user_id: str
     display_name: str
+    mobile: str | None
 
     @classmethod
     def of(cls, member: Member) -> "MemberResponse":
-        return cls(user_id=member.user_id, display_name=member.display_name)
+        return cls(user_id=member.user_id, display_name=member.display_name, mobile=member.mobile)
+
+
+class ProvidersResponse(BaseModel):
+    providers: list[str]
+
+
+class PendingRegistrationResponse(BaseModel):
+    display_name: str
+    return_to: str
 
 
 # Letters and digits (any script), spaces and - ' & . , starting with a letter or digit.

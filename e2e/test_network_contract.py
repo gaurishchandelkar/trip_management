@@ -83,7 +83,7 @@ def test_register_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     assert calls[1].request_json() == {"user_id": user_id.upper(), "display_name": "Ada Lovelace"}
     assert (calls[1].status, calls[1].json()) == (
         201,
-        {"user_id": user_id, "display_name": "Ada Lovelace"},
+        {"user_id": user_id, "display_name": "Ada Lovelace", "mobile": None},
     )
 
 
@@ -112,7 +112,7 @@ def test_sign_in_sends_one_request_and_never_resends_the_password(
     assert signed_in.request_json() == {"user_id": user_id, "password": typed}
     assert (signed_in.status, signed_in.json()) == (
         200,
-        {"user_id": user_id, "display_name": "Ada"},
+        {"user_id": user_id, "display_name": "Ada", "mobile": None},
     )
     assert calls[5].status == 200
     for call in (*calls[:2], *calls[3:]):

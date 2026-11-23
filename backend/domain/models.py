@@ -8,6 +8,11 @@ MAX_OWNED_GROUPS = 20
 MAX_PENDING_REQUESTS = 20
 BROWSE_LIMIT = 50
 SESSION_LIFETIME = timedelta(days=7)
+# A sign-in that leaves for the provider, and a registration waiting for its user ID, each
+# have 10 minutes. At most 1,000 of each are open at once, so the tables can't grow unbounded.
+SIGN_IN_LIFETIME = timedelta(minutes=10)
+MAX_OPEN_SIGN_INS = 1000
+MAX_PENDING_REGISTRATIONS = 1000
 
 
 class MembershipStatus(StrEnum):
@@ -27,6 +32,8 @@ class RequestStatus(StrEnum):
 class Member:
     user_id: str
     display_name: str
+    # None only for members registered before mobile numbers (removed with the old forms).
+    mobile: str | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +42,37 @@ class Identity:
 
     subject: str
     name: str | None
+
+
+@dataclass(frozen=True)
+class SignInFlow:
+    """A sign-in waiting for the provider to send the browser back. Used once."""
+
+    flow_hash: str
+    provider: str
+    state_hash: str
+    nonce: str
+    code_verifier: str
+    return_to: str
+    expires_at: datetime
+
+    def expired(self, now: datetime) -> bool:
+        return now >= self.expires_at
+
+
+@dataclass(frozen=True)
+class PendingRegistration:
+    """A verified identity with no member yet, waiting for a user ID and mobile number."""
+
+    token_hash: str
+    provider: str
+    subject: str
+    suggested_name: str
+    return_to: str
+    expires_at: datetime
+
+    def expired(self, now: datetime) -> bool:
+        return now >= self.expires_at
 
 
 @dataclass(frozen=True)

@@ -29,7 +29,8 @@
 ## In progress
 
 - **Registration and sign-in with Google** (`docs/specs/sso-registration.md`, `docs/plans/PLAN_sso-registration.md`), on `feat/sso-registration`.
-  - Phase 1 done: the OpenID Connect adapter (`backend/identity/`, joserfc + httpx2), PKCE, and an import contract that keeps `httpx2` and `joserfc` inside `backend/identity`. Not wired into the app yet.
+  - Phase 1 done: the OpenID Connect adapter (`backend/identity/`, joserfc + httpx2), PKCE, and an import contract that keeps `httpx2` and `joserfc` inside `backend/identity`.
+  - Phase 2 done: the backend sign-in and registration API (`/api/auth/...`), the `identities`, `sign_in_flows` and `pending_registrations` tables, and a nullable `members.mobile`. Google is on when `TRIP_GOOGLE_CLIENT_ID` and `TRIP_GOOGLE_CLIENT_SECRET` are set. The old user-ID forms still work; the frontend doesn't use the new routes yet.
 
 ## Known gaps
 

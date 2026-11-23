@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_clock
 from backend.main import create_app
+from backend.tests.integration.fake_provider import FakeIdentityProvider
 
 type SignedIn = Callable[[str], TestClient]
 
@@ -34,9 +35,15 @@ def clock() -> FakeClock:
 
 
 @pytest.fixture
-def app(db_path: Path, clock: FakeClock) -> FastAPI:
+def provider() -> FakeIdentityProvider:
+    return FakeIdentityProvider()
+
+
+@pytest.fixture
+def app(db_path: Path, clock: FakeClock, provider: FakeIdentityProvider) -> FastAPI:
     app = create_app(db_path)
     app.dependency_overrides[get_clock] = lambda: clock
+    app.state.identity_provider = provider
     return app
 
 

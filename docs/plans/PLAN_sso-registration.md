@@ -144,20 +144,20 @@ Deviations: PKCE lives in `backend/domain/pkce.py` and the two provider errors i
 - The old `POST /api/members` and `POST /api/sign-in` are left alone.
 
 Success criteria:
-- [ ] Integration tests (`backend/tests/integration/test_auth.py`) with `FakeIdentityProvider` and the injected clock:
+- [x] Integration tests (`backend/tests/integration/test_auth.py`) with `FakeIdentityProvider` and the injected clock:
   - start → `302` with the right `Location`, and a flow cookie with `HttpOnly`, `SameSite=Lax` and `Path=/api/auth`;
   - a callback for a linked subject → a `302` to `return_to` with a `session` cookie that `GET /api/me` accepts;
   - a callback for a new subject → a `302` to `/register/complete` with a pending-registration cookie (`Strict`), and no member or session created;
   - `GET /api/auth/registration` returns the name suggestion and `return_to`;
   - `POST` creates a linked member and a session.
-- [ ] Integration tests, failures. Each of these redirects to `/?sign_in=failed` with no `session` cookie:
+- [x] Integration tests, failures. Each of these redirects to `/?sign_in=failed` with no `session` cookie:
   - a wrong `state`, a reused `state`, no flow cookie, a flow 10 minutes 1 second old;
   - `IdentityRejected`, `ProviderUnavailable`;
   - a 513-character `code`, the 1,001st open flow, a corrupted database.
 
   `error=access_denied` → `/?sign_in=cancelled`.
-- [ ] Integration tests, `return_to`: `/groups/7` is kept; `https://evil.example`, `//evil.example`, `/\evil` and a 201-character path each become `/`.
-- [ ] Integration tests, registration:
+- [x] Integration tests, `return_to`: `/groups/7` is kept; `https://evil.example`, `//evil.example`, `/\evil` and a 201-character path each become `/`. *Also a tab inside the path (browsers drop it, turning `/<tab>/host` into `//host`), `javascript:`, a relative path and an empty value.*
+- [x] Integration tests, registration:
   - a taken user ID → `409 User ID already taken`, and the pending registration still works afterwards;
   - bad user IDs, display names and mobiles (`09876543210`, `+0123456789`, `+91abc`, 7 and 16 digits, a 21-character raw input), a missing field, an unknown field → `422 {"detail": "Invalid request"}`, and the body doesn't contain the input;
   - `+91 98765-43210` is stored as `+919876543210`;
@@ -165,10 +165,10 @@ Success criteria:
   - no, an expired or a used pending registration → `401 Not signed in`;
   - a subject linked meanwhile → `409 Account already linked`;
   - two threads submitting on a `threading.Barrier` → exactly one member.
-- [ ] Integration tests, unconfigured provider: `/api/auth/providers` → `{"providers": []}`, and start, callback and registration → `404`.
-- [ ] Integration test: the database has no column holding an email, token or Google name, and `identities` holds only `provider`, `subject` and `user_id` (inspected through `sqlite3`).
-- [ ] Unit tests (`backend/tests/unit/test_auth_service.py`) cover the outcomes, the `return_to` rule, expiry, the caps and single use against a `tmp_path` database. A `caplog` test shows no log record contains a display name, mobile, code, state, nonce or subject. Backend unit coverage stays at 80% or more.
-- [ ] `npm run check` passes. The old frontend and E2E still use the old routes and are untouched.
+- [x] Integration tests, unconfigured provider: `/api/auth/providers` → `{"providers": []}`, and start, callback and registration → `404`.
+- [x] Integration test: the database has no column holding an email, token or Google name, and `identities` holds only `provider`, `subject` and `user_id` (inspected through `sqlite3`).
+- [x] Unit tests (`backend/tests/unit/test_auth_service.py`) cover the outcomes, the `return_to` rule, expiry, the caps and single use against a `tmp_path` database. A `caplog` test shows no log record contains a display name, mobile, code, state, nonce or subject. Backend unit coverage stays at 80% or more. *90%.*
+- [x] `npm run check` passes. The old frontend and E2E still use the old routes and are untouched. *All stages pass. The old routes now return `mobile: null`, so the two old inside tests that pin those bodies exactly (`test_register_sends_one_request`, `test_sign_in_sends_one_request_and_never_resends_the_password`) and three old integration assertions in `test_members.py` gained `"mobile": None`. All of them are removed in Phase 3.*
 
 ## Phase 3: Google sign-in in the app, retire the old forms
 

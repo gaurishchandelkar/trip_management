@@ -6,9 +6,9 @@ from backend.api.dependencies import (
     CurrentMember,
     SessionToken,
     StoreDep,
+    set_session_cookie,
 )
 from backend.api.schemas import MemberResponse, Registration, SignIn
-from backend.domain.models import SESSION_LIFETIME
 from backend.services import members
 
 router = APIRouter(prefix="/api")
@@ -22,14 +22,7 @@ def register(body: Registration, store: StoreDep) -> MemberResponse:
 @router.post("/sign-in")
 def sign_in(body: SignIn, response: Response, store: StoreDep, clock: ClockDep) -> MemberResponse:
     member, token = members.sign_in(store, body.user_id, clock)
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        max_age=int(SESSION_LIFETIME.total_seconds()),
-        path="/api",
-        httponly=True,
-        samesite="strict",
-    )
+    set_session_cookie(response, token)
     return MemberResponse.of(member)
 
 

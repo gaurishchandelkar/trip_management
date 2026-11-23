@@ -22,6 +22,10 @@ class AlreadyMemberError(ConflictError):
     pass
 
 
+class AccountAlreadyLinkedError(ConflictError):
+    pass
+
+
 class LimitReachedError(DomainError):
     pass
 
