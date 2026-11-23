@@ -46,7 +46,6 @@ DisplayName = Annotated[
     StringConstraints(min_length=1, max_length=NAME_MAX_LENGTH, pattern=NAME_PATTERN),
     AfterValidator(_no_hidden_characters),
 ]
-Password = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
 # International format: "+", a country code that doesn't start with 0, 8 to 15 digits in all.
 MOBILE_PATTERN = re.compile(r"\+[1-9][0-9]{7,14}")
@@ -80,17 +79,6 @@ class RequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Registration(RequestBody):
-    user_id: UserId
-    display_name: DisplayName
-
-
-class SignIn(RequestBody):
-    user_id: UserId
-    # Required but not checked yet (spec D1). It is never stored, logged or returned.
-    password: Password
-
-
 class CompleteRegistration(RequestBody):
     user_id: UserId
     display_name: DisplayName
@@ -102,7 +90,7 @@ class MemberResponse(BaseModel):
 
     user_id: str
     display_name: str
-    mobile: str | None
+    mobile: str
 
     @classmethod
     def of(cls, member: Member) -> "MemberResponse":

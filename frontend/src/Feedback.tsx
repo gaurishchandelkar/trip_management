@@ -25,6 +25,7 @@ export function FeedbackMessage({ feedback }: { feedback: Feedback }) {
 
 const CONFLICT_MESSAGES: Record<ConflictReason, string> = {
   "user-id-taken": "That user ID is already taken.",
+  "account-linked": "This Google account is already registered. Sign in again.",
   "group-name-taken": "That group name is already taken.",
   "request-pending": "Request already pending.",
   "already-member": "You're already a member.",

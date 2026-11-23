@@ -22,9 +22,10 @@ from backend.domain.models import (
 from backend.services import groups
 from backend.storage.store import Store
 
-ADA = Member(user_id="ada", display_name="Ada")
-BOB = Member(user_id="bob", display_name="Bob")
-CAROL = Member(user_id="carol", display_name="Carol")
+MOBILE = "+919876543210"
+ADA = Member(user_id="ada", display_name="Ada", mobile=MOBILE)
+BOB = Member(user_id="bob", display_name="Bob", mobile=MOBILE)
+CAROL = Member(user_id="carol", display_name="Carol", mobile=MOBILE)
 
 
 @pytest.fixture
@@ -165,7 +166,7 @@ def test_approve_enforces_the_member_limit(store: Store, goa: int) -> None:
     request = groups.request_to_join(store, BOB, goa)
     with store.transaction() as tx:
         for n in range(MAX_GROUP_MEMBERS - 1):
-            tx.add_member(Member(user_id=f"friend{n}", display_name="Friend"))
+            tx.add_member(Member(user_id=f"friend{n}", display_name="Friend", mobile=MOBILE))
             tx.add_membership(goa, f"friend{n}")
 
     with pytest.raises(LimitReachedError):

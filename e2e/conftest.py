@@ -5,6 +5,7 @@ Dedicated ports, never reused: a dev server left running must not be what the te
 
 import http.client
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,9 @@ API_PORT = 8100
 WEB_PORT = 5273
 SCREENSHOT_API_PORT = 8101
 SCREENSHOT_WEB_PORT = 5274
+FAKE_GOOGLE_PORT = 8102
+FAKE_GOOGLE = f"http://{HOST}:{FAKE_GOOGLE_PORT}"
+FAKE_GOOGLE_CLIENT_ID = "caravan-e2e"
 STARTUP_TIMEOUT_S = 30
 BUILD_TIMEOUT_S = 120
 
@@ -136,11 +140,22 @@ def _start(
     )
 
 
+@dataclass(frozen=True)
+class FakeGoogle:
+    """The fake provider's server, and the client credentials it was started with."""
+
+    server: Server
+    client_secret: str
+
+
 @contextmanager
 def _serve(
-    label: str, work: Path, dist: Path, api_port: int, web_port: int
+    label: str, work: Path, dist: Path, api_port: int, web_port: int, google: FakeGoogle
 ) -> Generator[list[Server]]:
-    """A backend with its own throwaway database, and `vite preview` of `dist` proxying to it."""
+    """A backend with its own throwaway database, and `vite preview` of `dist` proxying to it.
+
+    The backend signs people in through the fake Google provider, never the real one.
+    """
     backend = [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", HOST]
     frontend = [_node(), str(VITE), "preview", "frontend", "--outDir", str(dist), "--host", HOST]
     started: list[Server] = []
@@ -152,8 +167,15 @@ def _serve(
                 api_port,
                 "/api/health",
                 work,
-                # A throwaway database, so the tests never touch dev data.
-                {"TRIP_DB_PATH": str(work / "trip.db")},
+                {
+                    # A throwaway database, so the tests never touch dev data.
+                    "TRIP_DB_PATH": str(work / "trip.db"),
+                    "TRIP_GOOGLE_CLIENT_ID": FAKE_GOOGLE_CLIENT_ID,
+                    "TRIP_GOOGLE_CLIENT_SECRET": google.client_secret,
+                    "TRIP_GOOGLE_ISSUER": FAKE_GOOGLE,
+                    # Where the provider sends the browser back: this pair's preview server.
+                    "TRIP_PUBLIC_URL": f"http://{HOST}:{web_port}",
+                },
             )
         )
         started.append(
@@ -181,16 +203,41 @@ def frontend_dist(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="session")
+def fake_google(tmp_path_factory: pytest.TempPathFactory) -> Iterator[FakeGoogle]:
+    """The stand-in for Google (e2e/fake_google.py), shared by both server pairs."""
+    # Made per run, so no client secret is ever committed.
+    client_secret = secrets.token_urlsafe(24)
+    fake = [sys.executable, "-m", "uvicorn", "e2e.fake_google:app", "--host", HOST]
+    server = _start(
+        "fake-google",
+        [*fake, "--port", str(FAKE_GOOGLE_PORT)],
+        FAKE_GOOGLE_PORT,
+        "/.well-known/openid-configuration",
+        tmp_path_factory.mktemp("fake-google"),
+        {
+            "FAKE_GOOGLE_ISSUER": FAKE_GOOGLE,
+            "FAKE_GOOGLE_CLIENT_ID": FAKE_GOOGLE_CLIENT_ID,
+            "FAKE_GOOGLE_CLIENT_SECRET": client_secret,
+        },
+    )
+    try:
+        yield FakeGoogle(server, client_secret)
+    finally:
+        server.stop()
+
+
+@pytest.fixture(scope="session")
 def servers(
-    tmp_path_factory: pytest.TempPathFactory, frontend_dist: Path
+    tmp_path_factory: pytest.TempPathFactory, frontend_dist: Path, fake_google: FakeGoogle
 ) -> Iterator[list[Server]]:
-    with _serve("", tmp_path_factory.mktemp("e2e"), frontend_dist, API_PORT, WEB_PORT) as started:
-        yield started
+    work = tmp_path_factory.mktemp("e2e")
+    with _serve("", work, frontend_dist, API_PORT, WEB_PORT, fake_google) as started:
+        yield [*started, fake_google.server]
 
 
 @pytest.fixture(scope="session")
 def screenshot_base_url(
-    tmp_path_factory: pytest.TempPathFactory, frontend_dist: Path
+    tmp_path_factory: pytest.TempPathFactory, frontend_dist: Path, fake_google: FakeGoogle
 ) -> Iterator[str]:
     """A second backend and preview server with their own database, for e2e/test_screenshots.py.
 
@@ -198,7 +245,8 @@ def screenshot_base_url(
     holds only the screenshots' sample data, so every run pictures the same screens.
     """
     work = tmp_path_factory.mktemp("screenshots")
-    with _serve("screenshot-", work, frontend_dist, SCREENSHOT_API_PORT, SCREENSHOT_WEB_PORT):
+    ports = (SCREENSHOT_API_PORT, SCREENSHOT_WEB_PORT)
+    with _serve("screenshot-", work, frontend_dist, *ports, fake_google):
         yield f"http://{HOST}:{SCREENSHOT_WEB_PORT}"
 
 
@@ -222,7 +270,8 @@ def servers_running(servers: list[Server]) -> None:
 def traffic(page: Page, base_url: str) -> Iterator[ApiTraffic]:
     recorder = ApiTraffic(page)
     yield recorder
-    foreign = recorder.foreign_origins(base_url)
+    # The fake Google provider is the one other origin a page may visit: signing in goes there.
+    foreign = recorder.foreign_origins(base_url, FAKE_GOOGLE)
     if foreign:
         pytest.fail(
             f"The page made requests outside the test servers: {', '.join(foreign)}\n"

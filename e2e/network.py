@@ -99,8 +99,8 @@ class ApiTraffic:
         """The /api/ calls made so far. Calls started after this point aren't included."""
         return [_call(request) for request in self._requests if _is_api(request)]
 
-    def foreign_origins(self, allowed: str) -> list[str]:
-        return sorted({origin(r.url) for r in self._requests} - {allowed})
+    def foreign_origins(self, *allowed: str) -> list[str]:
+        return sorted({origin(r.url) for r in self._requests} - set(allowed))
 
     def describe(self) -> str:
         seen = [

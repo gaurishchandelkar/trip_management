@@ -81,6 +81,33 @@
   background: var(--color-danger-hover);
 }
 
+/* A link that leaves the app, such as signing in with Google, styled as a button. */
+a.button {
+  text-decoration: none;
+}
+
+.google-mark {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+}
+
+.google-mark__blue {
+  fill: var(--color-google-blue);
+}
+
+.google-mark__green {
+  fill: var(--color-google-green);
+}
+
+.google-mark__yellow {
+  fill: var(--color-google-yellow);
+}
+
+.google-mark__red {
+  fill: var(--color-google-red);
+}
+
 /* Field */
 
 .field {

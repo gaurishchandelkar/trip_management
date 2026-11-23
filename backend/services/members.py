@@ -3,7 +3,7 @@ import secrets
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from backend.domain.errors import InvalidCredentialsError, UnauthenticatedError
+from backend.domain.errors import UnauthenticatedError
 from backend.domain.models import SESSION_LIFETIME, Member, Session, hash_token
 from backend.storage.store import Store, Transaction
 
@@ -16,13 +16,6 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def register(store: Store, user_id: str, display_name: str) -> Member:
-    member = Member(user_id=user_id, display_name=display_name)
-    with store.transaction() as tx:
-        tx.add_member(member)
-    return member
-
-
 def start_session(tx: Transaction, user_id: str, now: Clock) -> str:
     """Stores a new session for the member and returns its token. Only the hash is stored."""
     token = secrets.token_urlsafe(32)
@@ -30,17 +23,6 @@ def start_session(tx: Transaction, user_id: str, now: Clock) -> str:
         Session(token_hash=hash_token(token), user_id=user_id, expires_at=now() + SESSION_LIFETIME)
     )
     return token
-
-
-def sign_in(store: Store, user_id: str, now: Clock = utc_now) -> tuple[Member, str]:
-    """Starts a session for a registered member. Returns the member and the session token."""
-    with store.transaction() as tx:
-        member = tx.get_member(user_id)
-        if member is None:
-            raise InvalidCredentialsError
-        token = start_session(tx, user_id, now)
-    logger.info("signed in user_id=%s", user_id)
-    return member, token
 
 
 def sign_out(store: Store, token: str) -> None:

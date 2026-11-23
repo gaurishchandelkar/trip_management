@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_clock
 from backend.main import create_app
-from backend.tests.integration.fake_provider import FakeIdentityProvider
+from backend.tests.integration.fake_provider import FakeIdentityProvider, sign_up
 
 type SignedIn = Callable[[str], TestClient]
 
@@ -55,20 +55,18 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def signed_in(app: FastAPI, client: TestClient) -> Iterator[SignedIn]:
-    """Registers and signs in a member, each with their own cookie jar."""
+def signed_in(
+    app: FastAPI, client: TestClient, provider: FakeIdentityProvider
+) -> Iterator[SignedIn]:
+    """Signs a new member up through the identity provider, each with their own cookie jar."""
     clients: list[TestClient] = []
 
     def sign_in(user_id: str) -> TestClient:
         member = TestClient(app)
         clients.append(member)
-        display_name = user_id.capitalize()
-        register = member.post(
-            "/api/members", json={"user_id": user_id, "display_name": display_name}
-        )
-        assert register.status_code == 201, register.text
-        response = member.post("/api/sign-in", json={"user_id": user_id, "password": "x"})
-        assert response.status_code == 200, response.text
+        # Display names are letters only: "friend7" is shown as "Friend".
+        display_name = "".join(char for char in user_id if char.isalpha()).capitalize()
+        sign_up(member, provider, user_id, display_name=display_name)
         return member
 
     yield sign_in

@@ -16,6 +16,7 @@ from sqlalchemy import (
     exists,
     func,
     insert,
+    inspect,
     select,
     update,
 )
@@ -54,6 +55,16 @@ from backend.storage.schema import (
 )
 
 BUSY_TIMEOUT_S = 5
+
+
+class OutdatedDatabaseError(RuntimeError):
+    """The database file was made by an older version. It stops startup, with what to do."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This database is from an older version of the app, before sign-in with Google. "
+            "Delete trip.db (or the file TRIP_DB_PATH names) and start again."
+        )
 
 
 def _on_connect(dbapi_connection: sqlite3.Connection, _record: object) -> None:
@@ -103,6 +114,14 @@ class Transaction:
         self._connection = connection
 
     def create_schema(self) -> None:
+        # create_all adds missing tables but never changes an existing one, and there are no
+        # migrations yet: a members table from before mobile numbers can't be used. Checked
+        # first, so an old file is left exactly as it was.
+        schema = inspect(self._connection)
+        if schema.has_table("members") and "mobile" not in {
+            column["name"] for column in schema.get_columns("members")
+        }:
+            raise OutdatedDatabaseError
         metadata.create_all(self._connection)
 
     # Members
@@ -295,12 +314,12 @@ class Transaction:
 
     def group_members(self, group_id: int) -> tuple[Member, ...]:
         rows = self._connection.execute(
-            select(members.c.user_id, members.c.display_name)
+            select(members.c.user_id, members.c.display_name, members.c.mobile)
             .join(memberships, memberships.c.user_id == members.c.user_id)
             .where(memberships.c.group_id == group_id)
             .order_by(members.c.display_name, members.c.user_id)
         )
-        return tuple(Member(user_id=r.user_id, display_name=r.display_name) for r in rows)
+        return tuple(_member(row) for row in rows)
 
     def add_membership(self, group_id: int, user_id: str) -> None:
         self._connection.execute(insert(memberships).values(group_id=group_id, user_id=user_id))
@@ -382,7 +401,7 @@ def _timestamp(moment: datetime) -> int:
     return int(moment.timestamp())
 
 
-def _member(row: Row[str, str, str | None]) -> Member:
+def _member(row: Row[str, str, str]) -> Member:
     return Member(user_id=row.user_id, display_name=row.display_name, mobile=row.mobile)
 
 

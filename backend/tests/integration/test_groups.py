@@ -14,6 +14,7 @@ from backend.tests.integration.conftest import SignedIn
 NOT_FOUND = {"detail": "Not found"}
 FORBIDDEN = {"detail": "Forbidden"}
 LIMIT = {"detail": "Limit reached"}
+MOBILE = "+919876543210"
 
 
 def create(client: TestClient, name: str = "Goa 2027", description: str = "") -> Response:
@@ -177,7 +178,7 @@ def test_browse_returns_at_most_50_groups_sorted_by_name(app: FastAPI, signed_in
     with store_of(app).transaction() as tx:
         for n in range(60):
             owner = f"owner{n}"
-            tx.add_member(Member(user_id=owner, display_name="Owner"))
+            tx.add_member(Member(user_id=owner, display_name="Owner", mobile=MOBILE))
             tx.add_group(f"Trip {n:02d}", "", owner)
 
     names = [g["name"] for g in viewer.get("/api/groups").json()]
@@ -268,7 +269,7 @@ def test_asking_to_join_an_unknown_group(signed_in: SignedIn, group_id: str) -> 
 def test_the_21st_pending_request_is_refused(app: FastAPI, signed_in: SignedIn) -> None:
     bob = signed_in("bob")
     with store_of(app).transaction() as tx:
-        tx.add_member(Member(user_id="owner", display_name="Owner"))
+        tx.add_member(Member(user_id="owner", display_name="Owner", mobile=MOBILE))
         group_ids = [tx.add_group(f"Trip {n}", "", "owner") for n in range(21)]
     for group_id in group_ids[:20]:
         ask_id(bob, group_id)
@@ -412,7 +413,7 @@ def test_approving_into_a_full_group_is_refused(app: FastAPI, signed_in: SignedI
     request_id = ask_id(bob, goa)
     with store_of(app).transaction() as tx:
         for n in range(49):
-            tx.add_member(Member(user_id=f"friend{n}", display_name="Friend"))
+            tx.add_member(Member(user_id=f"friend{n}", display_name="Friend", mobile=MOBILE))
             tx.add_membership(goa, f"friend{n}")
 
     response = ada.post(f"/api/join-requests/{request_id}/approve")
@@ -456,7 +457,7 @@ def test_browse_search_and_detail_stay_fast_with_1000_groups(
     ada = signed_in("ada")
     with store_of(app).transaction() as tx:
         for n in range(1000):
-            tx.add_member(Member(user_id=f"member{n}", display_name="Member"))
+            tx.add_member(Member(user_id=f"member{n}", display_name="Member", mobile=MOBILE))
         for n in range(1000):
             group_id = tx.add_group(f"Trip {n:04d}", "", f"member{n}")
             tx.add_membership(group_id, f"member{(n + 1) % 1000}")

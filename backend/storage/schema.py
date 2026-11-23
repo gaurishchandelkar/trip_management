@@ -17,8 +17,8 @@ members = Table(
     metadata,
     Column("user_id", String(30), primary_key=True),
     Column("display_name", String(50), nullable=False),
-    # E.164: "+" and up to 15 digits. Nullable only until the old registration form is retired.
-    Column("mobile", String(16)),
+    # E.164: "+" and up to 15 digits.
+    Column("mobile", String(16), nullable=False),
 )
 
 # One row per provider account. A provider account belongs to one member, and a member has at

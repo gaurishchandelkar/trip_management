@@ -206,13 +206,13 @@ Success criteria:
   Their replacements are in the coverage table.
 
 Success criteria:
-- [ ] Vitest:
+- [x] Vitest:
   - signed-out shows **Continue with Google** with an `href` that carries `return_to`, and no textbox or password field;
   - no providers shows the not-set-up text;
   - each `sign_in` value shows its message, and the address loses the query;
   - Finish registering prefills the name, refuses bad input with no request sent, sends one request on a double click, keeps the input on `409`, and goes to `return_to` on `201`;
   - markup in a suggested name renders as text.
-- [ ] E2E outside, through the fake provider:
+- [x] E2E outside, through the fake provider:
   - a new person signs up and lands home signed in;
   - a returning person signs in;
   - a person signed out at `/groups/<id>` lands back there;
@@ -220,16 +220,21 @@ Success criteria:
   - a taken user ID shows the message and keeps the input;
   - a callback replayed in a second context fails;
   - sign-out shows **Continue with Google** again.
-- [ ] E2E inside:
+- [x] E2E inside:
   - a signed-out load makes exactly `GET /api/me` (401) then `GET /api/auth/providers`;
   - sign-up makes `GET /api/auth/google/start` (302), the fake provider pages, `GET /api/auth/google/callback` (302), `GET /api/auth/registration` and `POST /api/auth/registration` (201);
   - no `Location` the backend sends contains `code`, `state` or `id_token` except the one to the provider;
   - no API body contains the subject.
-- [ ] Every existing group journey and inside test passes unchanged on the new sign-up helper.
-- [ ] Unit test (`backend/tests/unit/test_storage.py::test_old_database_stops_startup`): a database with the old `members` table raises the "Delete trip.db" error.
-- [ ] `rg "api/members|api/sign-in|Passwords aren" backend frontend/src e2e` finds nothing, and `create_app().openapi()` lists neither route.
-- [ ] Browser check with the Playwright MCP server against `npm run dev`, with Google not configured: the signed-out screen shows the not-set-up message. (The real-Google check is the human's manual DoD item.)
-- [ ] `npm run check` passes.
+- [x] Every existing group journey and inside test passes unchanged on the new sign-up helper. *69 E2E tests pass. The inside tests that pinned the whole call list from page load now start from the sign-up sequence; sign-out now also loads the providers list.*
+- [x] Unit test (`backend/tests/unit/test_storage.py::test_old_database_stops_startup`): a database with the old `members` table raises the "Delete trip.db" error. *Also checked on a copy of the repo's real old `trip.db`. The check runs before `create_all`, so an old file isn't modified.*
+- [x] `rg "api/members|api/sign-in|Passwords aren" backend frontend/src e2e` finds nothing, and `create_app().openapi()` lists neither route. *The only matches are `test_retired_routes_create_nothing` and `test_create_app_registers_api_routes`, which assert the routes are gone.*
+- [x] Browser check with the Playwright MCP server against `npm run dev`, with Google not configured: the signed-out screen shows the not-set-up message. (The real-Google check is the human's manual DoD item.) *At `/groups/7?sign_in=cancelled` on a scratch database: "Sign-in isn't set up yet. See the README.", "Sign-in was cancelled.", and the address became `/groups/7`. Console: only the expected 401s from the session check.*
+
+Deviations:
+- The Google mark is its own component, `frontend/src/ui/GoogleMark.tsx`, coloured through four new tokens in `tokens.css` (so the raw-colour scan still holds), rather than an entry in `ui/Icon.tsx`, whose icons are single-colour strokes.
+- The fake provider (`e2e/fake_google.py`) lands here instead of Phase 1, and `ApiTraffic.foreign_origins` now takes several allowed origins.
+- `docs/plans/PLAN_app-shell-and-design-system.md` (Done) named five vitest titles and one journey that this phase retired; its coverage rows now name the replacements, with a note, so `scripts/harness-config.test.mjs` keeps passing.
+- [x] `npm run check` passes. *All 7 stages: 147 unit (backend), 244 vitest, 151 integration, 69 E2E.*
 
 ## Phase 4: Name, @user-id and mobile visibility
 

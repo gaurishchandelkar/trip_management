@@ -6,11 +6,11 @@ from fastapi import Request
 
 from backend.api.errors import domain_error, invalid_request
 from backend.domain.errors import (
+    AccountAlreadyLinkedError,
     AlreadyMemberError,
     DomainError,
     ForbiddenError,
     GroupNameTakenError,
-    InvalidCredentialsError,
     LimitReachedError,
     NotFoundError,
     RequestAlreadyPendingError,
@@ -39,7 +39,7 @@ def test_invalid_request_returns_generic_422() -> None:
         (LimitReachedError(), 409, "Limit reached"),
         (NotFoundError(), 404, "Not found"),
         (ForbiddenError(), 403, "Forbidden"),
-        (InvalidCredentialsError(), 401, "Invalid user ID or password"),
+        (AccountAlreadyLinkedError(), 409, "Account already linked"),
         (UnauthenticatedError(), 401, "Not signed in"),
         (StorageUnavailableError("SELECT secret FROM members"), 503, "Service unavailable"),
         (DomainError("unmapped"), 500, "Internal server error"),

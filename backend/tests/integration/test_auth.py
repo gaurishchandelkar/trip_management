@@ -579,5 +579,33 @@ def test_unconfigured_provider_routes_are_not_found(app: FastAPI, client: TestCl
         assert response.json() == {"detail": "Not found"}
 
 
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/members", {"user_id": "ada", "display_name": "Ada"}),
+        ("/api/sign-in", {"user_id": "ada", "password": "anything"}),
+    ],
+)
+def test_retired_routes_create_nothing(
+    app: FastAPI,
+    client: TestClient,
+    provider: FakeIdentityProvider,
+    db_path: Path,
+    path: str,
+    body: dict[str, str],
+) -> None:
+    sign_up(TestClient(app), provider, "ada", subject="s-ada")
+    paths = app.openapi()["paths"]
+
+    response = client.post(path, json=body)
+
+    assert response.status_code in {404, 405}
+    assert path not in paths
+    assert "session" not in response.cookies
+    with sqlite3.connect(db_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM members").fetchone() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM sessions").fetchone() == (1,)
+
+
 def test_configured_provider_is_listed(client: TestClient) -> None:
     assert client.get("/api/auth/providers").json() == {"providers": ["google"]}

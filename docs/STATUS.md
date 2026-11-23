@@ -30,7 +30,8 @@
 
 - **Registration and sign-in with Google** (`docs/specs/sso-registration.md`, `docs/plans/PLAN_sso-registration.md`), on `feat/sso-registration`.
   - Phase 1 done: the OpenID Connect adapter (`backend/identity/`, joserfc + httpx2), PKCE, and an import contract that keeps `httpx2` and `joserfc` inside `backend/identity`.
-  - Phase 2 done: the backend sign-in and registration API (`/api/auth/...`), the `identities`, `sign_in_flows` and `pending_registrations` tables, and a nullable `members.mobile`. Google is on when `TRIP_GOOGLE_CLIENT_ID` and `TRIP_GOOGLE_CLIENT_SECRET` are set. The old user-ID forms still work; the frontend doesn't use the new routes yet.
+  - Phase 2 done: the backend sign-in and registration API (`/api/auth/...`) and the `identities`, `sign_in_flows` and `pending_registrations` tables. Google is on when `TRIP_GOOGLE_CLIENT_ID` and `TRIP_GOOGLE_CLIENT_SECRET` are set.
+  - Phase 3 done: the app signs people in only with **Continue with Google**, and new people pick a user ID, display name and mobile number on **Finish registering** (`/register/complete`). `POST /api/members` and `POST /api/sign-in` are gone, and `members.mobile` is required. An old `trip.db` stops startup with a message to delete it. E2E signs in through a fake Google (`e2e/fake_google.py`, port 8102).
 
 ## Known gaps
 

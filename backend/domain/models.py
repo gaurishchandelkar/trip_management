@@ -30,10 +30,11 @@ class RequestStatus(StrEnum):
 
 @dataclass(frozen=True)
 class Member:
+    """A member. The user ID is the key everywhere; the display name and mobile are only shown."""
+
     user_id: str
     display_name: str
-    # None only for members registered before mobile numbers (removed with the old forms).
-    mobile: str | None = None
+    mobile: str
 
 
 @dataclass(frozen=True)

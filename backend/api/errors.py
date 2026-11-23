@@ -9,7 +9,6 @@ from backend.domain.errors import (
     DomainError,
     ForbiddenError,
     GroupNameTakenError,
-    InvalidCredentialsError,
     LimitReachedError,
     NotFoundError,
     RequestAlreadyPendingError,
@@ -30,7 +29,6 @@ ERROR_RESPONSES: dict[type[DomainError], tuple[int, str]] = {
     LimitReachedError: (409, "Limit reached"),
     NotFoundError: (404, "Not found"),
     ForbiddenError: (403, "Forbidden"),
-    InvalidCredentialsError: (401, "Invalid user ID or password"),
     UnauthenticatedError: (401, "Not signed in"),
     StorageUnavailableError: (503, "Service unavailable"),
 }
@@ -43,7 +41,7 @@ async def invalid_request(_request: Request, _exc: Exception) -> JSONResponse:
 
 
 async def domain_error(_request: Request, exc: Exception) -> JSONResponse:
-    # The most specific mapped class wins, so InvalidCredentialsError beats UnauthenticatedError.
+    # The most specific mapped class wins, so AccountAlreadyLinkedError beats a plain conflict.
     status, detail = next(
         (ERROR_RESPONSES[cls] for cls in type(exc).__mro__ if cls in ERROR_RESPONSES), UNEXPECTED
     )

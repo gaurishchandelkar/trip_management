@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approve,
   browseGroups,
+  completeRegistration,
   ConflictError,
   type ConflictReason,
   createGroup,
@@ -10,14 +11,15 @@ import {
   getGroup,
   getMe,
   getMyGroups,
+  getPendingRegistration,
+  getProviders,
+  googleSignInUrl,
   InvalidInputError,
   NotFoundError,
-  register,
   reject,
   requestToJoin,
   requestToJoinByName,
   SignedOutError,
-  signIn,
   signOut,
   UnavailableError,
 } from "./api";
@@ -32,27 +34,46 @@ function stubFetch(response: Response) {
   return fetchMock;
 }
 
-const ADA = { user_id: "ada", display_name: "Ada Lovelace" };
+const ADA = { user_id: "ada", display_name: "Ada Lovelace", mobile: "+919876543210" };
+
+function register() {
+  return completeRegistration("ada", "Ada", "+919876543210");
+}
 const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } };
 
 describe("members API", () => {
-  it("registers with a JSON body", async () => {
-    const fetchMock = stubFetch(Response.json(ADA, { status: 201 }));
+  it("lists the sign-in providers", async () => {
+    const fetchMock = stubFetch(Response.json({ providers: ["google"] }));
 
-    await expect(register("ada", "Ada Lovelace")).resolves.toEqual(ADA);
-    expect(fetchMock).toHaveBeenCalledWith("/api/members", {
-      ...JSON_POST,
-      body: JSON.stringify({ user_id: "ada", display_name: "Ada Lovelace" }),
-    });
+    await expect(getProviders()).resolves.toEqual(["google"]);
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/providers", { method: "GET" });
   });
 
-  it("signs in with the user ID and password", async () => {
-    const fetchMock = stubFetch(Response.json(ADA));
+  it("builds the Google sign-in address with an encoded return path", () => {
+    expect(googleSignInUrl("/groups/7")).toBe("/api/auth/google/start?return_to=%2Fgroups%2F7");
+  });
 
-    await expect(signIn("ada", "secret")).resolves.toEqual(ADA);
-    expect(fetchMock).toHaveBeenCalledWith("/api/sign-in", {
+  it("gets the pending registration", async () => {
+    const pending = { display_name: "Ada Lovelace", return_to: "/" };
+    const fetchMock = stubFetch(Response.json(pending));
+
+    await expect(getPendingRegistration()).resolves.toEqual(pending);
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/registration", { method: "GET" });
+  });
+
+  it("completes the registration with a JSON body", async () => {
+    const fetchMock = stubFetch(Response.json(ADA, { status: 201 }));
+
+    await expect(completeRegistration("ada", "Ada Lovelace", "+91 98765 43210")).resolves.toEqual(
+      ADA,
+    );
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/registration", {
       ...JSON_POST,
-      body: JSON.stringify({ user_id: "ada", password: "secret" }),
+      body: JSON.stringify({
+        user_id: "ada",
+        display_name: "Ada Lovelace",
+        mobile: "+91 98765 43210",
+      }),
     });
   });
 
@@ -169,6 +190,7 @@ describe("errors", () => {
 
   it.each<[string, ConflictReason]>([
     ["User ID already taken", "user-id-taken"],
+    ["Account already linked", "account-linked"],
     ["Group name already taken", "group-name-taken"],
     ["Request already pending", "request-pending"],
     ["Already a member", "already-member"],
@@ -177,7 +199,7 @@ describe("errors", () => {
   ])("maps the 409 %s to the reason %s", async (detail, reason) => {
     stubFetch(Response.json({ detail }, { status: 409 }));
 
-    const error: unknown = await register("ada", "Ada").catch((e: unknown) => e);
+    const error: unknown = await register().catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ConflictError);
     expect(error).toMatchObject({ reason });
@@ -186,7 +208,7 @@ describe("errors", () => {
   it("treats an unreadable 409 body as an unknown conflict", async () => {
     stubFetch(new Response("not json", { status: 409 }));
 
-    const error: unknown = await register("ada", "Ada").catch((e: unknown) => e);
+    const error: unknown = await register().catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ConflictError);
     expect((error as ConflictError).reason).toBe("unknown");
@@ -195,7 +217,7 @@ describe("errors", () => {
   it("treats a 409 body without a string detail as an unknown conflict", async () => {
     stubFetch(Response.json({ detail: 1 }, { status: 409 }));
 
-    const error = (await register("ada", "Ada").catch((e: unknown) => e)) as ConflictError;
+    const error = (await register().catch((e: unknown) => e)) as ConflictError;
 
     expect(error.reason).toBe("unknown");
   });

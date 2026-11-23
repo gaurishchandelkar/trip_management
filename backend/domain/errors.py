@@ -46,10 +46,6 @@ class StorageUnavailableError(DomainError):
     pass
 
 
-class InvalidCredentialsError(UnauthenticatedError):
-    pass
-
-
 class ProviderUnavailableError(DomainError):
     """The identity provider timed out, failed, or answered with something unreadable."""
 

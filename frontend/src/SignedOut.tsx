@@ -1,183 +1,74 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 
-import {
-  ConflictError,
-  InvalidInputError,
-  type Member,
-  register,
-  SignedOutError,
-  signIn,
-} from "./api";
+import { getProviders, googleSignInUrl } from "./api";
 import { alert, type Feedback, FeedbackMessage, status, UNAVAILABLE } from "./Feedback";
-import { Button } from "./ui/Button";
-import { Field } from "./ui/Field";
-import {
-  DISPLAY_NAME_HINT,
-  DISPLAY_NAME_MAX_LENGTH,
-  DISPLAY_NAME_RULE,
-  isValidDisplayName,
-  isValidUserId,
-  PASSWORD_MAX_LENGTH,
-  USER_ID_HINT,
-  USER_ID_MAX_LENGTH,
-  USER_ID_RULE,
-} from "./validation";
+import { GoogleMark } from "./ui/GoogleMark";
+import { Skeleton } from "./ui/Skeleton";
 
-function RegisterForm() {
-  const [userId, setUserId] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [feedback, setFeedback] = useState<Feedback>(null);
-  const [invalid, setInvalid] = useState<"user-id" | "display-name" | null>(null);
-  const [busy, setBusy] = useState(false);
+type Providers =
+  { status: "loading" } | { status: "ready"; google: boolean } | { status: "unavailable" };
 
-  function submit() {
-    const id = userId.trim();
-    const name = displayName.trim();
-    if (!isValidUserId(id)) {
-      setInvalid("user-id");
-      setFeedback(alert(USER_ID_HINT));
-      return;
-    }
-    if (!isValidDisplayName(name)) {
-      setInvalid("display-name");
-      setFeedback(alert(DISPLAY_NAME_HINT));
-      return;
-    }
-    setInvalid(null);
-    setBusy(true);
-    register(id, name)
-      .then((member) => {
-        setFeedback(status(`Registered as ${member.user_id}. You can sign in now.`));
-      })
-      .catch((error: unknown) => {
-        if (error instanceof ConflictError) setFeedback(alert("That user ID is already taken."));
-        else if (error instanceof InvalidInputError)
-          setFeedback(alert(`${USER_ID_HINT} ${DISPLAY_NAME_HINT}`));
-        else setFeedback(alert(UNAVAILABLE));
-      })
-      .finally(() => {
-        setBusy(false);
-      });
+/** What the backend's `?sign_in=` redirect means. Anything else shows nothing. */
+function signInMessage(value: string | null): Feedback {
+  switch (value) {
+    case "failed":
+      return alert("Couldn't sign in with Google. Please try again.");
+    case "cancelled":
+      return status("Sign-in was cancelled.");
+    case "expired":
+      return alert("Your sign-in expired. Please start again.");
+    default:
+      return null;
   }
-
-  return (
-    <form
-      className="card form"
-      aria-labelledby="register-heading"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
-    >
-      <h2 id="register-heading">Register</h2>
-      <Field
-        id="register-user-id"
-        label="User ID"
-        hint={USER_ID_RULE}
-        invalid={invalid === "user-id"}
-        value={userId}
-        maxLength={USER_ID_MAX_LENGTH}
-        autoComplete="username"
-        onChange={(event) => {
-          setUserId(event.target.value);
-        }}
-      />
-      <Field
-        id="register-display-name"
-        label="Display name"
-        hint={DISPLAY_NAME_RULE}
-        invalid={invalid === "display-name"}
-        value={displayName}
-        maxLength={DISPLAY_NAME_MAX_LENGTH}
-        autoComplete="name"
-        onChange={(event) => {
-          setDisplayName(event.target.value);
-        }}
-      />
-      <Button type="submit" busy={busy}>
-        Register
-      </Button>
-      <FeedbackMessage feedback={feedback} />
-    </form>
-  );
 }
 
-function SignInForm({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
-  const [userId, setUserId] = useState("");
-  const [password, setPassword] = useState("");
-  const [feedback, setFeedback] = useState<Feedback>(null);
-  const [invalid, setInvalid] = useState<"user-id" | "password" | null>(null);
-  const [busy, setBusy] = useState(false);
+export function SignedOut() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [providers, setProviders] = useState<Providers>({ status: "loading" });
+  // Read once: the query is removed from the address straight after.
+  const [message] = useState(() =>
+    signInMessage(new URLSearchParams(location.search).get("sign_in")),
+  );
 
-  function submit() {
-    const id = userId.trim();
-    if (!isValidUserId(id) || password === "") {
-      setInvalid(isValidUserId(id) ? "password" : "user-id");
-      setFeedback(alert("Enter your user ID and a password."));
-      return;
-    }
-    setInvalid(null);
-    setBusy(true);
-    signIn(id, password)
-      .then(onSignedIn)
-      .catch((error: unknown) => {
-        setBusy(false);
-        if (error instanceof SignedOutError)
-          setFeedback(alert("No member has that user ID. Register first."));
-        else if (error instanceof InvalidInputError)
-          setFeedback(alert("Enter your user ID and a password."));
-        else setFeedback(alert(UNAVAILABLE));
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("sign_in"))
+      void navigate({ pathname: location.pathname }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    getProviders()
+      .then((names) => {
+        setProviders({ status: "ready", google: names.includes("google") });
+      })
+      .catch(() => {
+        setProviders({ status: "unavailable" });
       });
-  }
+  }, []);
 
   return (
-    <form
-      className="card form"
-      aria-labelledby="sign-in-heading"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
-    >
+    <section className="card form sign-in" aria-labelledby="sign-in-heading">
       <h2 id="sign-in-heading">Sign in</h2>
-      <Field
-        id="sign-in-user-id"
-        label="User ID"
-        hint={USER_ID_RULE}
-        invalid={invalid === "user-id"}
-        value={userId}
-        maxLength={USER_ID_MAX_LENGTH}
-        autoComplete="username"
-        onChange={(event) => {
-          setUserId(event.target.value);
-        }}
-      />
-      <Field
-        id="sign-in-password"
-        label="Password"
-        hint="Passwords aren't checked yet."
-        invalid={invalid === "password"}
-        type="password"
-        value={password}
-        maxLength={PASSWORD_MAX_LENGTH}
-        autoComplete="current-password"
-        onChange={(event) => {
-          setPassword(event.target.value);
-        }}
-      />
-      <Button type="submit" variant="primary" busy={busy}>
-        Sign in
-      </Button>
-      <FeedbackMessage feedback={feedback} />
-    </form>
-  );
-}
-
-export function SignedOut({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
-  return (
-    <div className="signed-out__forms">
-      <SignInForm onSignedIn={onSignedIn} />
-      <RegisterForm />
-    </div>
+      <p className="sign-in__body">
+        Use your Google account. The first time, you&apos;ll choose a user ID and add your mobile
+        number.
+      </p>
+      {providers.status === "loading" && <Skeleton rows={1} />}
+      {providers.status === "ready" && providers.google && (
+        <a
+          className="button button--secondary sign-in__google"
+          href={googleSignInUrl(location.pathname)}
+        >
+          <GoogleMark />
+          Continue with Google
+        </a>
+      )}
+      {providers.status === "ready" && !providers.google && (
+        <p className="sign-in__unavailable">Sign-in isn&apos;t set up yet. See the README.</p>
+      )}
+      {providers.status === "unavailable" && <FeedbackMessage feedback={alert(UNAVAILABLE)} />}
+      <FeedbackMessage feedback={message} />
+    </section>
   );
 }

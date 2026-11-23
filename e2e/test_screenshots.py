@@ -9,13 +9,21 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from playwright.sync_api import APIResponse, Page, Playwright, StorageState, expect
+from playwright.sync_api import (
+    APIRequestContext,
+    APIResponse,
+    Page,
+    Playwright,
+    StorageState,
+    expect,
+)
 from playwright.sync_api import Error as PlaywrightError
 from pytest_playwright import CreateContextCallback
 
-from e2e.app import api, form, section
+from e2e.app import api, form, google_account, section
 from e2e.network import ApiTraffic, Signature
 
 SCREENS = ("sign-in", "home", "new-group-dialog", "group", "not-found")
@@ -24,6 +32,7 @@ WIDTHS = (360, 1280)
 OUT = Path(__file__).resolve().parent.parent / "test-results" / "screenshots"
 
 ME: Signature = ("GET", "/api/me", {})
+PROVIDERS: Signature = ("GET", "/api/auth/providers", {})
 MY_GROUPS: Signature = ("GET", "/api/me/groups", {})
 BROWSE: Signature = ("GET", "/api/groups", {})
 
@@ -45,16 +54,34 @@ def _ok(response: APIResponse) -> APIResponse:
     return response
 
 
+def _redirect(response: APIResponse) -> str:
+    assert response.status == 302, f"{response.url} -> {response.status} {response.text()}"
+    return response.headers["location"]
+
+
+def _sign_up(member: APIRequestContext, user_id: str, name: str, mobile: str) -> None:
+    """Signs up through the fake Google with plain requests, following each redirect by hand."""
+    authorize = urlsplit(_redirect(member.get("/api/auth/google/start", max_redirects=0)))
+    asked = {key: values[0] for key, values in parse_qs(authorize.query).items()}
+    carried = ("redirect_uri", "state", "nonce", "code_challenge")
+    approval: dict[str, str | float | bool] = {key: asked[key] for key in carried}
+    approval.update(subject=google_account(user_id), name=name, decision="allow")
+    decide = f"{authorize.scheme}://{authorize.netloc}/decide"
+    callback = _redirect(member.get(decide, params=approval, max_redirects=0))
+    assert _redirect(member.get(callback, max_redirects=0)) == "/register/complete"
+    registration = {"user_id": user_id, "display_name": name, "mobile": mobile}
+    _ok(member.post("/api/auth/registration", data=registration))
+
+
 @pytest.fixture(scope="session")
 def showcase(playwright: Playwright, screenshot_base_url: str) -> Iterator[Showcase]:
     """Ada owns Goa Getaway and Bob owns Ladakh Road Trip. Bob has asked to join Goa Getaway."""
     ada = playwright.request.new_context(base_url=screenshot_base_url)
     bob = playwright.request.new_context(base_url=screenshot_base_url)
     try:
-        for member, user_id, name in ((ada, "ada", "Ada Lovelace"), (bob, "bob", "Bob Marley")):
-            _ok(member.post("/api/members", data={"user_id": user_id, "display_name": name}))
-            # Any non-empty password is accepted until real passwords arrive (spec D1).
-            _ok(member.post("/api/sign-in", data={"user_id": user_id, "password": user_id}))
+        # Fictional numbers from the UK's drama range.
+        _sign_up(ada, "ada", "Ada Lovelace", "+44 7700 900123")
+        _sign_up(bob, "bob", "Bob Marley", "+44 7700 900456")
         ladakh = {
             "name": "Ladakh Road Trip",
             "description": "Bikes, high passes and too much chai.",
@@ -84,10 +111,11 @@ def _loaded(page: Page, heading: str) -> None:
 
 
 def _sign_in(page: Page, show: Showcase) -> list[Signature]:
-    with page.expect_response(api("GET", "/api/me")):
+    with page.expect_response(api("GET", "/api/auth/providers")):
         page.goto(f"{show.base_url}/")
     _loaded(page, "Sign in")
-    return [ME]
+    expect(page.get_by_role("link", name="Continue with Google")).to_be_visible()
+    return [ME, PROVIDERS]
 
 
 def _home(page: Page, show: Showcase) -> list[Signature]:
