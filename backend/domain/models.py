@@ -30,6 +30,14 @@ class Member:
 
 
 @dataclass(frozen=True)
+class Identity:
+    """Who the identity provider says signed in. `name` is only ever a suggestion."""
+
+    subject: str
+    name: str | None
+
+
+@dataclass(frozen=True)
 class Session:
     token_hash: str
     user_id: str

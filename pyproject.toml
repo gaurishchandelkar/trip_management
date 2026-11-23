@@ -5,6 +5,8 @@ description = "Trip Management for friends: members, groups and joining, inside 
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.162.0",
+    "httpx2>=2.16.0",
+    "joserfc>=1.8.0",
     "sqlalchemy>=2.1.6",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -12,7 +14,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "detect-secrets>=1.5.0",
-    "httpx2>=2.16.0",
     "import-linter>=2.15",
     "pip-audit>=2.10.1",
     "pytest>=9.1.1",
@@ -50,15 +51,29 @@ root_package = "backend"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Layers: api -> services -> storage -> domain"
+name = "Layers: api -> services -> storage | identity -> domain"
 type = "layers"
-layers = ["backend.main", "backend.api", "backend.services", "backend.storage", "backend.domain"]
+layers = [
+    "backend.main",
+    "backend.api",
+    "backend.services",
+    "backend.storage | backend.identity",
+    "backend.domain",
+]
 
 [[tool.importlinter.contracts]]
 name = "Domain is pure: no web framework or HTTP"
 type = "forbidden"
-source_modules = ["backend.domain", "backend.services", "backend.storage"]
+source_modules = ["backend.domain", "backend.services", "backend.storage", "backend.identity"]
 forbidden_modules = ["fastapi", "starlette", "uvicorn"]
+
+[[tool.importlinter.contracts]]
+name = "Only identity talks to the identity provider"
+type = "forbidden"
+source_modules = ["backend.api", "backend.services", "backend.storage", "backend.domain"]
+forbidden_modules = ["httpx2", "joserfc"]
+# Services reach the provider only through the IdentityProvider protocol; main wires it up.
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Only storage talks to the database"

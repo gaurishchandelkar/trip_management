@@ -28,7 +28,8 @@
 
 ## In progress
 
-- Nothing. CI screenshot artifacts merged as PR #5, and PR screenshots from the e2e captures as PR #8. Both are described under **Current state** (Verification and CI).
+- **Registration and sign-in with Google** (`docs/specs/sso-registration.md`, `docs/plans/PLAN_sso-registration.md`), on `feat/sso-registration`.
+  - Phase 1 done: the OpenID Connect adapter (`backend/identity/`, joserfc + httpx2), PKCE, and an import contract that keeps `httpx2` and `joserfc` inside `backend/identity`. Not wired into the app yet.
 
 ## Known gaps
 
