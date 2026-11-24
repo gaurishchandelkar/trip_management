@@ -18,9 +18,18 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 logger = logging.getLogger(__name__)
 
 
-class InsecureIssuerError(ValueError):
-    def __init__(self) -> None:
-        super().__init__(f"{ISSUER_VAR} must use https, or http on 127.0.0.1 or localhost.")
+class InsecureUrlError(ValueError):
+    def __init__(self, variable: str) -> None:
+        super().__init__(f"{variable} must use https, or http on 127.0.0.1 or localhost.")
+
+
+def _checked_url(variable: str, url: str) -> str:
+    """The URL without a trailing slash. Raises InsecureUrlError unless it's https or local http."""
+    parts = urlsplit(url)
+    local = parts.scheme == "http" and parts.hostname in LOCAL_HOSTS
+    if not parts.hostname or (parts.scheme != "https" and not local):
+        raise InsecureUrlError(variable)
+    return url.rstrip("/")
 
 
 def google_provider(env: Mapping[str, str]) -> OidcProvider | None:
@@ -38,11 +47,7 @@ def google_settings(env: Mapping[str, str]) -> OidcSettings | None:
             missing = CLIENT_CREDENTIAL_VAR if client_id else CLIENT_ID_VAR
             logger.warning("Google sign-in is off: %s isn't set", missing)
         return None
-    issuer = (env.get(ISSUER_VAR) or GOOGLE_ISSUER).rstrip("/")
-    parts = urlsplit(issuer)
-    local = parts.scheme == "http" and parts.hostname in LOCAL_HOSTS
-    if parts.scheme != "https" and not local:
-        raise InsecureIssuerError
+    issuer = _checked_url(ISSUER_VAR, env.get(ISSUER_VAR) or GOOGLE_ISSUER)
     return OidcSettings(
         issuer=issuer,
         client_id=client_id,
@@ -52,8 +57,9 @@ def google_settings(env: Mapping[str, str]) -> OidcSettings | None:
 
 
 def public_url(env: Mapping[str, str]) -> str:
-    """Where people open the app, without a trailing slash."""
-    return (env.get(PUBLIC_URL_VAR) or DEFAULT_PUBLIC_URL).rstrip("/")
+    """Where people open the app, without a trailing slash. Raises InsecureUrlError at startup
+    for a public http address, which would leave the session cookie without Secure."""
+    return _checked_url(PUBLIC_URL_VAR, env.get(PUBLIC_URL_VAR) or DEFAULT_PUBLIC_URL)
 
 
 def serves_https(env: Mapping[str, str]) -> bool:

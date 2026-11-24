@@ -4,7 +4,7 @@
 |---|---|
 | Backend | Python 3.12+, FastAPI, Uvicorn, Pydantic |
 | Storage | SQLite through SQLAlchemy 2.x Core, in `backend/storage/` only. The file comes from `TRIP_DB_PATH` (default `trip.db` in the repo root). The schema is created on startup, with no migrations yet |
-| Sign-in | Google through OpenID Connect, in `backend/identity/` only: joserfc checks the ID token, httpx2 calls discovery, the token endpoint and the keys. Configured by `TRIP_GOOGLE_CLIENT_ID`, `TRIP_GOOGLE_CLIENT_SECRET`, optionally `TRIP_PUBLIC_URL` (default `http://localhost:5173`) and, for tests only, `TRIP_GOOGLE_ISSUER` (`https`, or `http` on `127.0.0.1` or `localhost`). Tests use an in-process fake (integration) and `e2e/fake_google.py` (E2E) |
+| Sign-in | Google through OpenID Connect, in `backend/identity/` only: joserfc checks the ID token, httpx2 calls discovery, the token endpoint and the keys. Configured by `TRIP_GOOGLE_CLIENT_ID`, `TRIP_GOOGLE_CLIENT_SECRET`, optionally `TRIP_PUBLIC_URL` (default `http://localhost:5173`; `https`, or `http` on `127.0.0.1` or `localhost`, and cookies are `Secure` under `https`) and, for tests only, `TRIP_GOOGLE_ISSUER` (`https`, or `http` on `127.0.0.1` or `localhost`). Tests use an in-process fake (integration) and `e2e/fake_google.py` (E2E) |
 | Python tooling | uv (deps and running), ruff (lint and format), pyright (types), pytest + pytest-cov, import-linter, pip-audit |
 | Frontend | React 19, Vite, TypeScript (strict), React Router 8 (declarative mode) |
 | Design system | Plain CSS: design tokens in `frontend/src/theme/tokens.css` (light and dark), components in `frontend/src/ui/`, the Inter variable font self-hosted through `@fontsource-variable/inter` |

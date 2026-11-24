@@ -100,8 +100,8 @@ def start_sign_in(
     with store.transaction() as tx:
         tx.delete_expired_sign_ins(now())
         if tx.count_sign_in_flows() >= MAX_OPEN_SIGN_INS:
-            # The oldest make room, rather than refusing: refusing would let anyone who can
-            # open 1,000 sign-ins lock everyone out for 10 minutes.
+            # The oldest make room, rather than refusing: refusing let one burst of 1,000 starts
+            # lock everyone out for 10 minutes. A sustained flood still can (no rate limiting).
             tx.drop_oldest_sign_ins(keep=MAX_OPEN_SIGN_INS - 1)
             logger.warning("sign-in provider=%s open sign-ins full, oldest dropped", provider.name)
         tx.add_sign_in_flow(

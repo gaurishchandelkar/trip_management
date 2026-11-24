@@ -72,7 +72,7 @@ Using a flow or a pending registration is a conditional `DELETE … RETURNING`, 
 - **A temporarily nullable `mobile` (Phases 2–3):** Phase 2 adds the new routes while the old forms still exist, so every phase can end with a full green `npm run check`. The old `POST /api/members` can't supply a mobile number, so the column is nullable until Phase 3 retires the old routes and makes it `NOT NULL`. Because of the fresh start, there's no migration in between. Delete your local `trip.db` after pulling.
 - **An old `trip.db` stops startup:** after creating the schema, the store checks that `members.mobile` exists. If it doesn't, startup fails with "This database is from an older version. Delete trip.db and start again." The new tables are always created; only the old `members` table can't change without migrations.
 - **Flow cookie `SameSite=Lax`:** required for the callback, as the spec says. Its path is `/api/auth`, and it holds only a random ID.
-- **Cookies without `Secure`:** unchanged from today. The app runs over plain HTTP on localhost, and Google allows `http://localhost` redirect URIs for development.
+- **Cookies without `Secure`:** (superseded: `Secure` under https, see Follow-up: review findings, security low 5) unchanged from today. The app runs over plain HTTP on localhost, and Google allows `http://localhost` redirect URIs for development.
 - **Fake provider realism:** the fake server signs real RS256 tokens with a key generated at startup, publishes JWKS and discovery, checks PKCE and the redirect URI, and supports cancel. It doesn't imitate Google's consent screen. The real-Google check stays manual (Definition of Done).
 - **Unit coverage includes the adapter.** Coverage is measured on unit tests only, so `backend/identity/` is tested with `httpx2.MockTransport` and tokens signed by a test key. That covers discovery, JWKS caching and rotation, timeouts, bad JSON, and every claim failure.
 - **Removed tests:** the E2E journeys and inside tests for the user-ID forms are replaced (listed in Phase 3). The `unique_user_id` helper stays, because Finish registering still takes a user ID.
@@ -346,10 +346,19 @@ Deviations recorded now (code nit 11, 13):
 - After a server `422`, Profile shows the combined hint without marking a field, because the server's fixed body can't say which field failed. The frontend's own checks, which run first, do mark the field.
 
 Decided by the repo owner ("both") and done, with the spec updated:
-- **Security low 2:** anyone who could reach the app could fill the 1,000 open sign-ins and block sign-in for 10 minutes. Now a full table drops the oldest open sign-in (`Store.drop_oldest_sign_ins`) and logs a warning. Tests: `test_a_full_table_drops_the_oldest_sign_in_to_make_room` (unit) and `test_a_full_table_still_lets_a_new_sign_in_through` (integration). Proof: with the drop disabled, the unit test fails.
+- **Security low 2:** anyone who could reach the app could fill the 1,000 open sign-ins and block sign-in for 10 minutes. Now a full table drops the oldest open sign-in (`Store.drop_oldest_sign_ins`) and logs a warning. That stops a one-off burst; a sustained flood (about 50 starts a second) still drops real sign-ins, recorded in `docs/STATUS.md` known gaps. Tests: `test_a_full_table_drops_the_oldest_sign_in_to_make_room` (unit) and `test_a_full_table_still_lets_a_new_sign_in_through` (integration). Proof: with the drop disabled, the unit test fails.
 - **Security low 5:** `main` sets `app.state.secure_cookies` from `serves_https(env)`, and every cookie set or cleared (flow, pending registration, session, sign-out) carries `Secure` when `TRIP_PUBLIC_URL` is `https`. Tests: `test_serves_https_only_for_an_https_public_url` (unit) and `test_every_cookie_is_secure_only_when_served_over_https` (integration, http and https). Proof: with the flag forced off, the https case fails.
 
+Second review, of 94e162c and 2d99c3c (both reviewers: nothing blocking). Fixed:
+- **The integration `app` fixture clears every `TRIP_*` variable** before `create_app` (code should-fix 1). Before, a shell with an https `TRIP_PUBLIC_URL` made the session cookies `Secure`, the `http://testserver` client dropped them, and tests failed with 401. Proof: with that variable set and the fix stashed, `test_profile.py` fails; with the fix, it passes.
+- **The lockout claim** in `docs/SPEC.md`, the spec and the code comment now says a one-off burst can't lock sign-in out but a sustained flood still can, and `docs/STATUS.md` lists the missing rate limiting (code should-fix 2, security low 1).
+- **`TRIP_PUBLIC_URL` is checked at startup** with the issuer's rule: `https`, or `http` on `localhost` or `127.0.0.1` (security low 2). `InsecureIssuerError` became `InsecureUrlError`, naming the variable. Test: `test_refuses_a_public_url_that_is_neither_https_nor_local`. Proof: with the check removed from `public_url`, it fails.
+- Nits: the superseded "Cookies without `Secure`" decision is marked, the final test counts are updated, and a comment that restated `main.py` is gone.
+
 Left as they are:
+- **One warning per start while the table is full** (code nit 5, security low 1): uvicorn already writes an access line per request, so this at most doubles the log during a flood. Rate limiting is the real fix, and it's out of scope (spec, Out of scope).
+- **Ties in "oldest"** (security low 1): `expires_at` has 1-second resolution, so among flows started in the same second the one dropped is arbitrary. Every one of them is equally old, so it doesn't matter which.
+- **`__Secure-` cookie prefixes and HSTS** (security hardening): for a deployment, which is out of scope.
 - **Informational:** httpx2's 5-second timeout applies per phase, not to the whole request, and expired sessions are deleted only when presented (as on `main`).
 - **Human-owned:** `.env.example` has an indented comment line and no final newline.
 
@@ -357,7 +366,7 @@ Left as they are:
 
 ## Final verification
 
-- [x] `npm run check` passes *All 7 stages, with this plan at Done: 157 backend unit (90% coverage), 263 vitest, 173 integration, 73 E2E, 24 screenshots.*
+- [x] `npm run check` passes *All 7 stages, with this plan at Done: 183 backend unit (90% coverage), 276 vitest, 178 integration, 74 E2E, 24 screenshots, 5 import contracts kept (after the second review).*
 - [x] Every acceptance criterion in the spec is covered by a test (table below)
 - [x] `code-reviewer` and `security-reviewer` run before `/handover` *Run on 2026-11-24; findings and fixes under "Follow-up: review findings".*
 - [x] The human signs in once with a real Google account on `localhost` (manual, spec Definition of Done) *Confirmed by the repo owner on 2026-11-24, with the credentials loaded from `.env`.*

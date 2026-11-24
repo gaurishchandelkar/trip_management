@@ -3,7 +3,7 @@ import logging
 import pytest
 
 from backend.identity.config import (
-    InsecureIssuerError,
+    InsecureUrlError,
     google_provider,
     google_settings,
     serves_https,
@@ -21,14 +21,24 @@ BOTH = {"TRIP_GOOGLE_CLIENT_ID": ID, "TRIP_GOOGLE_CLIENT_SECRET": CREDENTIAL}
         (None, False),
         ("http://localhost:5173", False),
         ("https://trips.example.org", True),
+        ("http://127.0.0.1:5274", False),
         ("HTTPS://trips.example.org/", True),
-        ("httpsx://trips.example.org", False),
     ],
 )
 def test_serves_https_only_for_an_https_public_url(public_url: str | None, https: bool) -> None:
     env = {} if public_url is None else {"TRIP_PUBLIC_URL": public_url}
 
     assert serves_https(env) is https
+
+
+@pytest.mark.parametrize(
+    "public_url",
+    ["http://trips.example.org", "trips.example.org", "httpsx://trips.example.org", "https://"],
+)
+def test_refuses_a_public_url_that_is_neither_https_nor_local(public_url: str) -> None:
+    # A public http address would leave the session cookie without Secure.
+    with pytest.raises(InsecureUrlError, match="TRIP_PUBLIC_URL"):
+        serves_https({"TRIP_PUBLIC_URL": public_url})
 
 
 def test_no_variables_means_google_is_off() -> None:
@@ -83,7 +93,7 @@ def test_half_configured_is_off_and_names_the_missing_variable(
     "issuer", ["http://example.com", "http://127.0.0.1.example.com", "ftp://x"]
 )
 def test_refuses_an_issuer_that_is_neither_https_nor_local(issuer: str) -> None:
-    with pytest.raises(InsecureIssuerError):
+    with pytest.raises(InsecureUrlError):
         google_settings({**BOTH, "TRIP_GOOGLE_ISSUER": issuer})
 
 

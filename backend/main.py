@@ -41,7 +41,6 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     app = FastAPI(title="Trip Management", lifespan=lifespan)
     app.state.store = store
     app.state.identity_provider = provider
-    # Every cookie is Secure once TRIP_PUBLIC_URL is https (spec sso-registration).
     app.state.secure_cookies = serves_https(os.environ)
     app.add_middleware(BodySizeLimit)
     app.add_exception_handler(RequestValidationError, invalid_request)
