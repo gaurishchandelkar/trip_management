@@ -29,39 +29,81 @@ def load(page: Page, path: str = "/") -> None:
         page.goto(path)
 
 
-def load_signed_out(page: Page) -> None:
-    load(page)
-    expect(form(page, "Sign in")).to_be_visible()
+MOBILE = "+91 98765 43210"
 
 
-def register(page: Page, user_id: str, display_name: str) -> None:
-    register_form = form(page, "Register")
-    register_form.get_by_label("User ID").fill(user_id)
-    register_form.get_by_label("Display name").fill(display_name)
-    with page.expect_response(api("POST", "/api/members")):
-        register_form.get_by_role("button", name="Register").click()
+def sign_in_panel(page: Page) -> Locator:
+    return page.get_by_role("region", name="Sign in")
 
 
-def sign_in(page: Page, user_id: str, entered: str = "anything") -> None:
-    # Any non-empty password is accepted until real passwords arrive (spec D1).
-    sign_in_form = form(page, "Sign in")
-    sign_in_form.get_by_label("User ID").fill(user_id)
-    sign_in_form.get_by_label("Password").fill(entered)
-    with page.expect_response(api("POST", "/api/sign-in")):
-        sign_in_form.get_by_role("button", name="Sign in").click()
+def google_link(page: Page) -> Locator:
+    return page.get_by_role("link", name="Continue with Google")
 
 
-def register_and_sign_in(page: Page, user_id: str, display_name: str) -> None:
-    load_signed_out(page)
-    register(page, user_id, display_name)
-    expect(form(page, "Register").get_by_role("status")).to_contain_text("Registered")
-    # Signing in opens the home view, which loads my groups and the browse list.
+def load_signed_out(page: Page, path: str = "/") -> None:
+    """Opens the app without a session and waits until Continue with Google shows."""
+    with page.expect_response(api("GET", "/api/auth/providers")):
+        load(page, path)
+    expect(google_link(page)).to_be_visible()
+
+
+def google_account(subject: str) -> str:
+    """The fake Google's account ID for a test person. Never shown by the app."""
+    return f"google-{subject}"
+
+
+def to_google(page: Page) -> None:
+    """Presses Continue with Google and waits for the (fake) Google sign-in page."""
+    google_link(page).click()
+    expect(page.get_by_role("heading", name="Fake Google sign-in")).to_be_visible()
+
+
+def google_continues(page: Page, subject: str, name: str = "") -> None:
+    """Signs in at the fake Google. The browser comes back to the app, which loads afresh."""
+    page.get_by_label("Account ID").fill(google_account(subject))
+    page.get_by_label("Name").fill(name)
+    with page.expect_response(api("GET", "/api/me")):
+        page.get_by_role("button", name="Continue").click()
+
+
+def finish_registering(
+    page: Page, user_id: str, display_name: str, mobile: str = MOBILE
+) -> Locator:
+    """Fills in Finish registering and sends it. Returns the form, for checking messages."""
+    registration = form(page, "Finish registering")
+    registration.get_by_label("User ID").fill(user_id)
+    registration.get_by_label("Display name").fill(display_name)
+    registration.get_by_label("Mobile number").fill(mobile)
+    with page.expect_response(api("POST", "/api/auth/registration")):
+        registration.get_by_role("button", name="Finish registering").click()
+    return registration
+
+
+def sign_up(page: Page, user_id: str, display_name: str, mobile: str = MOBILE) -> None:
+    """From the signed-out screen: Google, then Finish registering. Ends on the home screen."""
+    to_google(page)
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, user_id, display_name)
+    expect(form(page, "Finish registering")).to_be_visible()
+    # Registering signs in and opens home, which loads my groups and the browse list.
     with (
         page.expect_response(api("GET", "/api/me/groups")),
         page.expect_response(api("GET", "/api/groups")),
     ):
-        sign_in(page, user_id)
+        finish_registering(page, user_id, display_name, mobile)
     expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+
+
+def sign_in_with_google(page: Page, user_id: str) -> None:
+    """A registered person signs in again. The app reloads at the address they were on."""
+    to_google(page)
+    google_continues(page, user_id)
+    expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+
+
+def register_and_sign_in(page: Page, user_id: str, display_name: str) -> None:
+    load_signed_out(page)
+    sign_up(page, user_id, display_name)
 
 
 def load_home(page: Page) -> None:

@@ -157,7 +157,7 @@ Name each test as `path::test name`: a Python `def`, or a vitest title exactly a
 
 | Spec acceptance criterion | Tests |
 |---|---|
-| 20 PNGs: 5 screens × 2 themes × 2 widths, named `<screen>-<theme>-<width>.png` | `e2e/test_screenshots.py::test_captures_every_screen`, `scripts/screenshot-summary.test.mjs::passes when all 20 screenshots are present` |
+| 20 PNGs: 5 screens × 2 themes × 2 widths, named `<screen>-<theme>-<width>.png` (24 since `docs/plans/PLAN_sso-registration.md` added the profile screen; the test was renamed with it) | `e2e/test_screenshots.py::test_captures_every_screen`, `scripts/screenshot-summary.test.mjs::passes when all 24 screenshots are present` |
 | Dark captures use the dark `--color-bg`, light ones the light one | `e2e/test_screenshots.py::test_captures_every_screen` |
 | Full page, taken only when loaded: fonts ready, no skeleton, heading visible, no animation or caret | `e2e/test_screenshots.py::test_captures_every_screen` |
 | Fixed sample data, no random suffixes | `e2e/test_screenshots.py::test_captures_every_screen` |

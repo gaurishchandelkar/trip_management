@@ -103,6 +103,12 @@
   color: var(--color-text);
 }
 
+/* The user ID sits beneath the name, smaller: it tells two people with one name apart. */
+.app-header__user-id {
+  display: block;
+  font-size: var(--text-xs);
+}
+
 .app-header__session .callout {
   flex-basis: 100%;
 }
@@ -137,12 +143,16 @@
   .brand__link,
   .back-link,
   .group-card__name,
+  .person__phone,
+  .app-header__profile,
   .not-found a {
     min-height: var(--touch-target);
   }
 
   .skip-link,
   .group-card__name,
+  .person__phone,
+  .app-header__profile,
   .not-found a {
     display: inline-flex;
     align-items: center;
@@ -236,6 +246,37 @@
 .home {
   display: grid;
   gap: var(--space-8);
+}
+
+/* Profile */
+
+.profile {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 32rem;
+}
+
+.profile__fixed {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.profile__fixed dt {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.profile__fixed dd {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.app-header__profile {
+  /* A short word: on phones it needs a minimum width too, to stay a 44 px target. */
+  min-width: var(--touch-target);
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .home__section {
@@ -366,10 +407,30 @@
   gap: var(--space-3);
 }
 
-.person__name {
+.person__details {
+  display: flex;
   flex: 1 1 8rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
   min-width: 0;
+}
+
+.person__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: var(--weight-medium);
+}
+
+.person__id {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.person__phone {
+  flex-basis: 100%;
+  font-size: var(--text-sm);
 }
 
 .person__actions {

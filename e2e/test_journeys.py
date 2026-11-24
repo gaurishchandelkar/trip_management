@@ -10,25 +10,31 @@ from playwright.sync_api import Dialog, Page, Route, expect
 from pytest_playwright import CreateContextCallback
 
 from e2e.app import (
+    MOBILE,
     PHONE,
     api,
     back_to_home,
     create_group,
+    finish_registering,
     form,
+    google_continues,
+    google_link,
     group_path,
     load,
     load_home,
     load_signed_out,
     open_dialog,
     open_group,
-    register,
     register_and_sign_in,
     search_groups,
     section,
     sideways_overflow,
-    sign_in,
+    sign_in_panel,
+    sign_in_with_google,
     sign_out,
+    sign_up,
     small_targets,
+    to_google,
     unique_group_name,
     unique_user_id,
 )
@@ -40,14 +46,13 @@ def other_page(new_context: CreateContextCallback) -> Page:
     return new_context().new_page()
 
 
-def test_shows_sign_in_and_register_forms(page: Page) -> None:
+def test_signed_out_screen_offers_only_google(page: Page) -> None:
     load_signed_out(page)
 
-    sign_in_form = form(page, "Sign in")
-    expect(sign_in_form.get_by_label("User ID")).to_be_visible()
-    expect(sign_in_form.get_by_label("Password")).to_have_attribute("type", "password")
-    expect(sign_in_form.get_by_text("Passwords aren't checked yet.")).to_be_visible()
-    expect(form(page, "Register").get_by_label("Display name")).to_be_visible()
+    expect(sign_in_panel(page)).to_contain_text("Use your Google account.")
+    expect(google_link(page)).to_be_visible()
+    expect(page.locator("main input")).to_have_count(0)
+    expect(page.get_by_text(re.compile("password", re.IGNORECASE))).to_have_count(0)
 
 
 def test_shows_alert_when_backend_fails(page: Page) -> None:
@@ -58,12 +63,63 @@ def test_shows_alert_when_backend_fails(page: Page) -> None:
     expect(page.get_by_role("alert")).to_contain_text("Something went wrong, please try again.")
 
 
-def test_register_sign_in_and_see_display_name(page: Page) -> None:
+def test_new_person_signs_up_with_google(page: Page) -> None:
     user_id = unique_user_id("ada")
+    load_signed_out(page)
+    to_google(page)
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, user_id, "Ada Lovelace")
 
-    register_and_sign_in(page, user_id, "Ada Lovelace")
+    registration = form(page, "Finish registering")
+    expect(registration.get_by_label("Display name")).to_have_value("Ada Lovelace")
+    expect(registration.get_by_label("Mobile number")).to_have_attribute("type", "tel")
+    expect(registration).to_contain_text("Group owners can see your mobile number.")
+    with page.expect_response(api("GET", "/api/me/groups")):
+        finish_registering(page, user_id, "Ada Lovelace")
 
     expect(page.get_by_text("Signed in as Ada Lovelace")).to_be_visible()
+    expect(page.get_by_role("heading", name="Groups", level=2)).to_be_visible()
+    assert urlsplit(page.url).path == "/"
+
+
+def test_returning_member_signs_in_with_google(page: Page, other_page: Page) -> None:
+    user_id = unique_user_id("ada")
+    register_and_sign_in(other_page, user_id, "Ada Lovelace")
+    load_signed_out(page)
+
+    sign_in_with_google(page, user_id)
+
+    expect(page.get_by_text("Signed in as Ada Lovelace")).to_be_visible()
+    expect(form(page, "Finish registering")).to_have_count(0)
+
+
+def test_cancelling_at_google_says_so(page: Page) -> None:
+    load_signed_out(page)
+    to_google(page)
+
+    with page.expect_response(api("GET", "/api/me")):
+        page.get_by_role("button", name="Cancel").click()
+
+    expect(sign_in_panel(page).get_by_role("status")).to_have_text("Sign-in was cancelled.")
+    expect(google_link(page)).to_be_visible()
+    assert urlsplit(page.url).query == ""
+
+
+def test_replayed_callback_in_another_browser_fails(page: Page, other_page: Page) -> None:
+    load_signed_out(page)
+    to_google(page)
+    with page.expect_response(lambda r: "/api/auth/google/callback" in r.url) as callback:
+        google_continues(page, unique_user_id("ada"), "Ada")
+    expect(form(page, "Finish registering")).to_be_visible()
+
+    # The same callback URL, code and state, opened in a browser that never started a sign-in.
+    with other_page.expect_response(api("GET", "/api/auth/providers")):
+        other_page.goto(callback.value.url)
+
+    expect(sign_in_panel(other_page).get_by_role("alert")).to_have_text(
+        "Couldn't sign in with Google. Please try again."
+    )
+    expect(other_page.get_by_role("button", name="Sign out")).to_have_count(0)
 
 
 def test_session_survives_a_reload(page: Page) -> None:
@@ -79,31 +135,24 @@ def test_sign_out_returns_to_sign_in(page: Page) -> None:
 
     sign_out(page)
 
-    expect(form(page, "Sign in")).to_be_visible()
-    load(page)
-    expect(form(page, "Sign in")).to_be_visible()
-
-
-def test_unregistered_user_id_cannot_sign_in(page: Page) -> None:
+    expect(google_link(page)).to_be_visible()
     load_signed_out(page)
-
-    sign_in(page, unique_user_id("ghost"))
-
-    expect(form(page, "Sign in").get_by_role("alert")).to_contain_text(
-        "No member has that user ID. Register first."
-    )
+    expect(page.get_by_role("button", name="Sign out")).to_have_count(0)
 
 
-def test_taken_user_id_cannot_register_again(page: Page) -> None:
+def test_taken_user_id_says_so_and_keeps_the_input(page: Page, other_page: Page) -> None:
     user_id = unique_user_id("ada")
+    register_and_sign_in(other_page, user_id, "Ada")
     load_signed_out(page)
-    register(page, user_id, "Ada")
+    to_google(page)
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, unique_user_id("other"), "Other")
 
-    register(page, user_id.upper(), "Other")
+    registration = finish_registering(page, user_id.upper(), "Other")
 
-    expect(form(page, "Register").get_by_role("alert")).to_have_text(
-        "That user ID is already taken."
-    )
+    expect(registration.get_by_role("alert")).to_have_text("That user ID is already taken.")
+    expect(registration.get_by_label("User ID")).to_have_value(user_id.upper())
+    expect(registration.get_by_label("Mobile number")).to_have_value(MOBILE)
 
 
 def test_markup_in_a_display_name_is_never_rendered(page: Page) -> None:
@@ -115,12 +164,19 @@ def test_markup_in_a_display_name_is_never_rendered(page: Page) -> None:
 
     page.on("dialog", dismiss)
     load_signed_out(page)
-    register_form = form(page, "Register")
-    register_form.get_by_label("User ID").fill(unique_user_id("eve"))
-    register_form.get_by_label("Display name").fill("<img src=x onerror=alert(1)>")
-    register_form.get_by_role("button", name="Register").click()
+    to_google(page)
+    markup = "<img src=x onerror=alert(1)>"
+    # Google's name is markup: the app neither suggests it nor renders it.
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, unique_user_id("eve"), markup)
+    registration = form(page, "Finish registering")
+    expect(registration.get_by_label("Display name")).to_have_value("")
+    registration.get_by_label("User ID").fill(unique_user_id("eve"))
+    registration.get_by_label("Display name").fill(markup)
+    registration.get_by_label("Mobile number").fill(MOBILE)
+    registration.get_by_role("button", name="Finish registering").click()
 
-    expect(register_form.get_by_role("alert")).to_contain_text("Display names are letters")
+    expect(registration.get_by_role("alert")).to_contain_text("Display names are letters")
     expect(page.locator("main img")).to_have_count(0)
     assert dialogs == []
 
@@ -130,14 +186,15 @@ def test_owner_approves_a_member_who_found_the_group_by_browsing(
 ) -> None:
     ada, bob = page, other_page
     name = unique_group_name("Goa")
-    register_and_sign_in(ada, unique_user_id("ada"), "Ada")
+    ada_id = unique_user_id("ada")
+    register_and_sign_in(ada, ada_id, "Ada")
     create_group(ada, name, "Beach week")
     expect(section(ada, "My groups").get_by_role("link", name=name)).to_be_visible()
 
     register_and_sign_in(bob, unique_user_id("bob"), "Bob")
     search_groups(bob, name)
     browse = section(bob, "Browse groups")
-    expect(browse.get_by_text("by Ada, 1 member")).to_be_visible()
+    expect(browse.get_by_text(f"by Ada (@{ada_id}), 1 member")).to_be_visible()
     with bob.expect_response(lambda r: r.url.endswith("/join-requests")):
         browse.get_by_role("button", name=f"Request to join {name}").click()
     expect(browse.get_by_text("Request pending")).to_be_visible()
@@ -155,6 +212,66 @@ def test_owner_approves_a_member_who_found_the_group_by_browsing(
     expect(section(bob, "Members")).to_contain_text("Ada")
     expect(section(bob, "Members")).to_contain_text("Bob")
     expect(section(bob, "Pending requests")).to_have_count(0)
+
+
+def test_owner_sees_the_requesters_user_id_and_phone(page: Page, other_page: Page) -> None:
+    ada, bob = page, other_page
+    name = unique_group_name("Goa")
+    ada_id, bob_id = unique_user_id("ada"), unique_user_id("bob")
+    register_and_sign_in(ada, ada_id, "Ada")
+    create_group(ada, name)
+    load_signed_out(bob)
+    sign_up(bob, bob_id, "Bob", mobile="+44 7700 900123")
+    search_groups(bob, name)
+    with bob.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(bob, "Browse groups").get_by_role("button", name=f"Request to join {name}").click()
+
+    open_group(ada, "My groups", name)
+    pending = section(ada, "Pending requests")
+    expect(pending).to_contain_text(f"@{bob_id}")
+    phone = pending.get_by_role("link", name=re.compile("^Call Bob"))
+    expect(phone).to_have_attribute("href", "tel:+447700900123")
+    expect(phone).to_have_text("+447700900123")
+    with ada.expect_response(lambda r: r.url.endswith("/approve")):
+        pending.get_by_role("button", name=f"Approve Bob (@{bob_id})").click()
+    expect(
+        section(ada, "Members").get_by_role("link", name=re.compile("^Call Bob"))
+    ).to_be_visible()
+
+    # Bob, now a member but not the owner, sees who's in by name and user ID, with no numbers.
+    load_home(bob)
+    open_group(bob, "My groups", name)
+    members = section(bob, "Members")
+    expect(members).to_contain_text(f"@{ada_id}")
+    expect(members).to_contain_text(f"@{bob_id}")
+    expect(bob.locator('a[href^="tel:"]')).to_have_count(0)
+    expect(bob.get_by_text(f"Owner: Ada (@{ada_id}).")).to_be_visible()
+
+
+def test_member_changes_their_mobile_number(page: Page, other_page: Page) -> None:
+    ada, bob = page, other_page
+    name = unique_group_name("Goa")
+    bob_id = unique_user_id("bob")
+    register_and_sign_in(ada, unique_user_id("ada"), "Ada")
+    create_group(ada, name)
+    register_and_sign_in(bob, bob_id, "Bob")
+    search_groups(bob, name)
+    with bob.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(bob, "Browse groups").get_by_role("button", name=f"Request to join {name}").click()
+
+    bob.get_by_role("link", name="Profile").click()
+    profile = form(bob, "Profile")
+    expect(profile.get_by_text(f"@{bob_id}")).to_be_visible()
+    expect(profile.get_by_label("Mobile number")).to_have_value("+919876543210")
+    profile.get_by_label("Mobile number").fill("+44 7700 900999")
+    with bob.expect_response(api("POST", "/api/me/profile")):
+        profile.get_by_role("button", name="Save").click()
+    expect(profile.get_by_role("status")).to_have_text("Profile saved.")
+    expect(profile.get_by_label("Mobile number")).to_have_value("+447700900999")
+
+    open_group(ada, "My groups", name)
+    phone = section(ada, "Pending requests").get_by_role("link", name=re.compile("^Call Bob"))
+    expect(phone).to_have_attribute("href", "tel:+447700900999")
 
 
 def test_owner_rejects_a_request_made_by_name(page: Page, other_page: Page) -> None:
@@ -292,10 +409,9 @@ def test_signed_out_visitor_lands_on_the_group_after_signing_in(page: Page) -> N
     address = group_path(page)
     sign_out(page)
 
-    load(page, address)
-    expect(form(page, "Sign in")).to_be_visible()
+    load_signed_out(page, address)
     with page.expect_response(lambda r: _group_request(r.url)):
-        sign_in(page, user_id)
+        sign_in_with_google(page, user_id)
 
     expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
     assert urlsplit(page.url).path == address
@@ -388,17 +504,16 @@ def test_welcome_panel_sits_beside_the_forms_wide_and_above_them_narrow(page: Pa
     welcome = page.get_by_role("region", name="Plan trips together.")
     expect(welcome).to_contain_text("Caravan")
 
-    panel, sign_in_box = welcome.bounding_box(), form(page, "Sign in").bounding_box()
+    panel, sign_in_box = welcome.bounding_box(), sign_in_panel(page).bounding_box()
     assert panel is not None and sign_in_box is not None
     assert panel["x"] + panel["width"] <= sign_in_box["x"], (panel, sign_in_box)
     assert panel["y"] < sign_in_box["y"] + sign_in_box["height"], (panel, sign_in_box)
 
     page.set_viewport_size({"width": 360, "height": 740})
-    panel, sign_in_box = welcome.bounding_box(), form(page, "Sign in").bounding_box()
+    panel, sign_in_box = welcome.bounding_box(), sign_in_panel(page).bounding_box()
     assert panel is not None and sign_in_box is not None
     assert panel["y"] + panel["height"] <= sign_in_box["y"], (panel, sign_in_box)
-    expect(form(page, "Sign in")).to_be_visible()
-    expect(form(page, "Register")).to_be_visible()
+    expect(google_link(page)).to_be_visible()
 
 
 def _long_group_name() -> str:
@@ -480,10 +595,9 @@ def test_text_shows_in_a_system_font_when_the_web_font_fails(page: Page) -> None
 
     load_signed_out(page)
 
-    sign_in_form = form(page, "Sign in")
-    expect(sign_in_form).to_have_css("font-family", re.compile(r"Inter Variable.*system-ui"))
-    expect(sign_in_form.get_by_role("heading", name="Sign in")).to_be_visible()
-    expect(sign_in_form.get_by_label("User ID")).to_be_visible()
-    expect(sign_in_form.get_by_role("button", name="Sign in")).to_be_visible()
+    panel = sign_in_panel(page)
+    expect(panel).to_have_css("font-family", re.compile(r"Inter Variable.*system-ui"))
+    expect(panel.get_by_role("heading", name="Sign in")).to_be_visible()
+    expect(google_link(page)).to_be_visible()
     # The page did ask for the web font, and was refused: the text above is the fallback.
     assert aborted, "no web font was requested"

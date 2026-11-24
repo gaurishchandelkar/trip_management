@@ -6,11 +6,13 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from backend.api import groups, members
+from backend.api import auth, groups, members
+from backend.api.access_log import redact_auth_queries
 from backend.api.body_limit import BodySizeLimit
 from backend.api.errors import domain_error, invalid_request
 from backend.api.routes import router
 from backend.domain.errors import DomainError
+from backend.identity.config import google_provider, serves_https
 from backend.storage.store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,20 +26,29 @@ def database_path() -> Path:
 
 def create_app(db_path: Path | None = None) -> FastAPI:
     store = Store(db_path or database_path())
+    # Google sign-in is on only when its client ID and secret are set (spec sso-registration).
+    provider = google_provider(os.environ)
+    # The callback's one-time code and state must never reach uvicorn's access log.
+    redact_auth_queries()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         store.create_schema()
         yield
+        if provider is not None:
+            provider.close()
 
     app = FastAPI(title="Trip Management", lifespan=lifespan)
     app.state.store = store
+    app.state.identity_provider = provider
+    app.state.secure_cookies = serves_https(os.environ)
     app.add_middleware(BodySizeLimit)
     app.add_exception_handler(RequestValidationError, invalid_request)
     app.add_exception_handler(DomainError, domain_error)
     app.include_router(router)
     app.include_router(members.router)
     app.include_router(groups.router)
+    app.include_router(auth.router)
     return app
 
 

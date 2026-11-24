@@ -1,6 +1,6 @@
 ---
 name: security-reviewer
-description: Reviews a diff against docs/SECURITY_GUIDELINES.md for vulnerabilities and risky harness changes. Use before /ship, or when a change touches input handling, dependencies, auth or config. Read-only.
+description: Reviews a diff against docs/SECURITY_GUIDELINES.md for vulnerabilities and risky harness changes. Use before /handover, or when a change touches input handling, dependencies, auth or config. Read-only.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---

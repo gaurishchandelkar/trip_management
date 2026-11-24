@@ -1,20 +1,32 @@
+import re
 import unicodedata
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    ValidationError,
+)
 
 from backend.domain.models import (
+    DISPLAY_NAME_MAX_LENGTH,
     GroupDetail,
     GroupSummary,
     JoinRequest,
     Member,
     MembershipStatus,
+    PendingRequest,
+    Person,
     RequestStatus,
 )
 
 # Letters (any script), optionally joined by single spaces, hyphens or apostrophes.
 NAME_PATTERN = r"^[^\W\d_]+(?:[ '\-][^\W\d_]+)*$"
-NAME_MAX_LENGTH = 50
+NAME_MAX_LENGTH = DISPLAY_NAME_MAX_LENGTH
 USER_ID_PATTERN = r"^[A-Za-z][A-Za-z0-9_-]*$"
 
 # Upper-case is accepted and folded, so "ADA" collides with "ada" instead of failing validation.
@@ -38,31 +50,71 @@ DisplayName = Annotated[
     StringConstraints(min_length=1, max_length=NAME_MAX_LENGTH, pattern=NAME_PATTERN),
     AfterValidator(_no_hidden_characters),
 ]
-Password = Annotated[str, StringConstraints(min_length=1, max_length=128)]
+
+# International format: "+", a country code that doesn't start with 0, 8 to 15 digits in all.
+MOBILE_PATTERN = re.compile(r"\+[1-9][0-9]{7,14}")
+MOBILE_INPUT_MAX_LENGTH = 20
+
+
+def _normalized_mobile(value: str) -> str:
+    # Spaces and hyphens are how people group digits; the number itself is stored without them.
+    number = value.replace(" ", "").replace("-", "")
+    if not MOBILE_PATTERN.fullmatch(number):
+        raise ValueError
+    return number
+
+
+Mobile = Annotated[
+    str,
+    StringConstraints(max_length=MOBILE_INPUT_MAX_LENGTH),
+    AfterValidator(_normalized_mobile),
+]
+
+
+def suggested_display_name(name: str) -> str:
+    """The provider's name if it passes the display-name rule, otherwise empty."""
+    try:
+        return TypeAdapter(DisplayName).validate_python(name)
+    except ValidationError:
+        return ""
 
 
 class RequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Registration(RequestBody):
+class CompleteRegistration(RequestBody):
     user_id: UserId
     display_name: DisplayName
+    mobile: Mobile
 
 
-class SignIn(RequestBody):
-    user_id: UserId
-    # Required but not checked yet (spec D1). It is never stored, logged or returned.
-    password: Password
+class ProfileUpdate(RequestBody):
+    """Both fields every time. A user_id in the body is an unknown field, so a 422."""
+
+    display_name: DisplayName
+    mobile: Mobile
 
 
 class MemberResponse(BaseModel):
+    """The signed-in member, about themselves. Only they ever see their own mobile here."""
+
     user_id: str
     display_name: str
+    mobile: str
 
     @classmethod
     def of(cls, member: Member) -> "MemberResponse":
-        return cls(user_id=member.user_id, display_name=member.display_name)
+        return cls(user_id=member.user_id, display_name=member.display_name, mobile=member.mobile)
+
+
+class ProvidersResponse(BaseModel):
+    providers: list[str]
+
+
+class PendingRegistrationResponse(BaseModel):
+    display_name: str
+    return_to: str
 
 
 # Letters and digits (any script), spaces and - ' & . , starting with a letter or digit.
@@ -106,6 +158,7 @@ class GroupResponse(BaseModel):
     group_id: int
     name: str
     description: str
+    owner_user_id: str
     owner_display_name: str
     member_count: int
     my_status: MembershipStatus
@@ -116,25 +169,41 @@ class GroupResponse(BaseModel):
             group_id=summary.group_id,
             name=summary.name,
             description=summary.description,
+            owner_user_id=summary.owner_id,
             owner_display_name=summary.owner_display_name,
             member_count=summary.member_count,
             my_status=summary.my_status,
         )
 
 
-class MemberNameResponse(BaseModel):
-    # No user_id: until passwords are checked (spec D1), a user ID is enough to sign in.
+class PersonResponse(BaseModel):
+    user_id: str
     display_name: str
+    # Only the group's owner gets it; for anyone else the key isn't in the JSON at all.
+    mobile: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @classmethod
+    def of(cls, person: Person) -> "PersonResponse":
+        return cls(user_id=person.user_id, display_name=person.display_name, mobile=person.mobile)
 
 
-class PendingRequestResponse(BaseModel):
+class PendingRequestResponse(PersonResponse):
     request_id: int
-    display_name: str
+
+    @classmethod
+    def of_request(cls, request: PendingRequest) -> "PendingRequestResponse":
+        requester = request.requester
+        return cls(
+            request_id=request.request_id,
+            user_id=requester.user_id,
+            display_name=requester.display_name,
+            mobile=requester.mobile,
+        )
 
 
 class GroupDetailResponse(GroupResponse):
     # null when the viewer may not see the list.
-    members: list[MemberNameResponse] | None
+    members: list[PersonResponse] | None
     pending_requests: list[PendingRequestResponse] | None
 
     @classmethod
@@ -143,15 +212,10 @@ class GroupDetailResponse(GroupResponse):
         pending = detail.pending_requests
         return cls(
             **GroupResponse.of(detail.summary).model_dump(),
-            members=None
-            if members is None
-            else [MemberNameResponse(display_name=m.display_name) for m in members],
+            members=None if members is None else [PersonResponse.of(m) for m in members],
             pending_requests=None
             if pending is None
-            else [
-                PendingRequestResponse(request_id=p.request_id, display_name=p.display_name)
-                for p in pending
-            ],
+            else [PendingRequestResponse.of_request(p) for p in pending],
         )
 
 

@@ -20,7 +20,7 @@ Work moves through stages, and each stage leaves an artifact behind. Humans spen
 | **Gate: approve plan** | **Human** | Plan reviewed | |
 | 3. Implement | Agent | Commits, one per phase | `/implement` |
 | 4. Verify | Agent + tools | `npm run check` output, ticked criteria | `/implement` |
-| 5. Ship | Agent | Branch and PR description | `/ship` |
+| 5. Ship | Agent | Branch and PR description | `/handover` |
 | **Gate: approve PR** | **Human** | Review on the "human attention needed" items | |
 | 6. Learn | Agent, human confirms | `docs/HARNESS_LOG.md` entry, harness change | `/retro` |
 
@@ -77,7 +77,7 @@ build → lint → unit → integration → functional → security → architec
 
 The pre-commit hook runs the fast stages for staged files. CI runs every stage on every PR.
 
-On every CI run, the functional job uploads the 20 screenshots as the `ui-screenshots` artifact, kept 14 days, and lists them in its job summary. Reviewers see the UI from there, not from screenshots an agent took by hand. For a branch that changes `frontend/` or `e2e/test_screenshots.py`, `npm run pr` also attaches the 20 local captures from `test-results/screenshots/` to the PR, and refuses a partial set or one older than the branch's last UI commit.
+On every CI run, the functional job uploads the 24 screenshots as the `ui-screenshots` artifact, kept 14 days, and lists them in its job summary. Reviewers see the UI from there, not from screenshots an agent took by hand. For a branch that changes `frontend/` or `e2e/test_screenshots.py`, `npm run pr` also attaches the 24 local captures from `test-results/screenshots/` to the PR, and refuses a partial set or one older than the branch's last UI commit.
 
 ## Small changes outside a plan
 

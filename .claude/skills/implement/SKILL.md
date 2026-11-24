@@ -33,4 +33,4 @@ Implement `docs/plans/PLAN_$ARGUMENTS.md`.
 
 ## Report
 
-Give a table of the success criteria, each with its evidence (test name or command output), the final `npm run check` result, and any deviations. Suggest `/ship $ARGUMENTS`.
+Give a table of the success criteria, each with its evidence (test name or command output), the final `npm run check` result, and any deviations. Suggest `/handover $ARGUMENTS`.

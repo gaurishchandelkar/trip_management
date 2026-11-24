@@ -9,7 +9,7 @@
   "scripts": {
     "prepare": "node scripts/prepare.mjs",
     "dev": "concurrently -k -n backend,frontend -c blue,green npm:dev:backend npm:dev:frontend",
-    "dev:backend": "uv run -m uvicorn backend.main:app --reload --reload-dir backend",
+    "dev:backend": "node scripts/dev-backend.mjs",
     "dev:frontend": "vite frontend",
     "format": "uv run ruff format && uv run ruff check --fix && prettier --write -u .",
     "check": "node scripts/check.mjs",

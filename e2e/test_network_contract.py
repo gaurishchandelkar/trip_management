@@ -3,6 +3,7 @@
 Each test waits for the specific response it expects, then asserts every /api/ call made by then.
 """
 
+from collections.abc import Sequence
 from typing import cast
 from urllib.parse import urlsplit
 
@@ -11,36 +12,71 @@ from playwright.sync_api import Page, expect
 from pytest_playwright import CreateContextCallback
 
 from e2e.app import (
+    MOBILE,
     PHONE,
     api,
     back_to_home,
     create_group,
+    finish_registering,
     form,
+    google_account,
+    google_continues,
+    google_link,
     group_path,
     load,
     load_home,
     load_signed_out,
     open_dialog,
     open_group,
-    register,
     register_and_sign_in,
     search_groups,
     section,
-    sign_in,
+    sign_in_with_google,
     sign_out,
+    sign_up,
+    to_google,
     unique_group_name,
     unique_user_id,
 )
-from e2e.network import ApiTraffic, Call, Signature, covers
+from e2e.conftest import Server
+from e2e.network import ApiTraffic, Call, Signature, covers, origin
 
 ME: Signature = ("GET", "/api/me", {})
-REGISTER: Signature = ("POST", "/api/members", {})
-SIGN_IN: Signature = ("POST", "/api/sign-in", {})
+PROVIDERS: Signature = ("GET", "/api/auth/providers", {})
 SIGN_OUT: Signature = ("POST", "/api/sign-out", {})
 MY_GROUPS: Signature = ("GET", "/api/me/groups", {})
 BROWSE: Signature = ("GET", "/api/groups", {})
 CREATE: Signature = ("POST", "/api/groups", {})
-HOME = [MY_GROUPS, BROWSE]
+HOME: list[Signature] = [MY_GROUPS, BROWSE]
+SIGNED_OUT: list[Signature] = [ME, PROVIDERS]
+
+# Calls whose query carries a one-time code or state are compared by method and path.
+type Route = tuple[str, str]
+START: Route = ("GET", "/api/auth/google/start")
+CALLBACK: Route = ("GET", "/api/auth/google/callback")
+PENDING: Route = ("GET", "/api/auth/registration")
+COMPLETE: Route = ("POST", "/api/auth/registration")
+
+
+def routes(calls: list[Call]) -> list[Route]:
+    return [(call.method, call.path) for call in calls]
+
+
+def routes_of(signatures: Sequence[Signature]) -> list[Route]:
+    return [(method, path) for method, path, _ in signatures]
+
+
+# A new person, from the signed-out screen to registered: the app, Google, the callback, then
+# the app again at /register/complete.
+SIGN_UP: list[Route] = [
+    *routes_of(SIGNED_OUT),
+    START,
+    CALLBACK,
+    *routes_of([ME]),
+    PENDING,
+    COMPLETE,
+]
+HOME_ROUTES = routes_of(HOME)
 
 
 @pytest.fixture
@@ -49,13 +85,14 @@ def other_page(new_context: CreateContextCallback) -> Page:
     return new_context().new_page()
 
 
-@covers("test_shows_sign_in_and_register_forms")
+@covers("test_signed_out_screen_offers_only_google")
 def test_load_checks_the_session_once(page: Page, traffic: ApiTraffic) -> None:
     load_signed_out(page)
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME], traffic.describe()
+    assert [call.signature for call in calls] == SIGNED_OUT, traffic.describe()
     assert (calls[0].status, calls[0].json()) == (401, {"detail": "Not signed in"})
+    assert (calls[1].status, calls[1].json()) == (200, {"providers": ["google"]})
 
 
 @covers("test_shows_alert_when_backend_fails")
@@ -70,89 +107,148 @@ def test_backend_failure_checks_the_session_once(page: Page, traffic: ApiTraffic
     assert calls[0].status == 500
 
 
-@covers("test_register_sign_in_and_see_display_name")
-def test_register_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
-    user_id = unique_user_id("ada")
-    load_signed_out(page)
-
-    register(page, f"  {user_id.upper()} ", " Ada Lovelace ")
-    expect(form(page, "Register").get_by_role("status")).to_be_visible()
-
-    calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME, REGISTER], traffic.describe()
-    assert calls[1].request_json() == {"user_id": user_id.upper(), "display_name": "Ada Lovelace"}
-    assert (calls[1].status, calls[1].json()) == (
-        201,
-        {"user_id": user_id, "display_name": "Ada Lovelace"},
-    )
-
-
-@covers("test_register_sign_in_and_see_display_name", "test_session_survives_a_reload")
-def test_sign_in_sends_one_request_and_never_resends_the_password(
-    page: Page, traffic: ApiTraffic
+@covers("test_new_person_signs_up_with_google", "test_session_survives_a_reload")
+def test_sign_up_follows_the_redirects_once(
+    page: Page, traffic: ApiTraffic, servers: list[Server]
 ) -> None:
     user_id = unique_user_id("ada")
-    typed = "never-sent-again"
     load_signed_out(page)
-    register(page, user_id, "Ada")
+    to_google(page)
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, user_id, "Ada Lovelace")
+    with (
+        page.expect_response(api("GET", "/api/me/groups")),
+        page.expect_response(api("GET", "/api/groups")),
+    ):
+        finish_registering(page, f"  {user_id.upper()} ", " Ada Lovelace ")
+    # Read the registration's bodies now: a reload discards them.
+    calls = traffic.api_calls()
+    load_home(page)
+
+    assert routes(calls) == [*SIGN_UP, *HOME_ROUTES], traffic.describe()
+    start, callback, pending, complete = calls[2], calls[3], calls[5], calls[6]
+    assert (start.status, start.query) == (302, {"return_to": ["/"]})
+    assert callback.status == 302
+    assert set(callback.query) == {"code", "state"}
+    assert (pending.status, pending.json()) == (
+        200,
+        {"display_name": "Ada Lovelace", "return_to": "/"},
+    )
+    assert complete.request_json() == {
+        "user_id": user_id.upper(),
+        "display_name": "Ada Lovelace",
+        "mobile": MOBILE,
+    }
+    assert (complete.status, complete.json()) == (
+        201,
+        {"user_id": user_id, "display_name": "Ada Lovelace", "mobile": "+919876543210"},
+    )
+    # The redirects: only the provider's own (to the callback) carries a code or state. The app
+    # sends the browser on to /register/complete with nothing in the address.
+    app = origin(page.url)
+    every = traffic.calls()
+    for call in every:
+        if origin(call.url) == app and call.path != CALLBACK[1]:
+            assert not {"code", "state", "id_token"} & call.query.keys(), call.url
+    after_callback = every[[call.path for call in every].index(CALLBACK[1]) + 1]
+    assert (after_callback.path, after_callback.query) == ("/register/complete", {})
+    # The provider's account ID never reaches the app's API bodies.
+    for call in traffic.api_calls():
+        assert google_account(user_id) not in f"{call.body} {call.request_body}"
+    assert [call.signature for call in traffic.api_calls()[len(calls) :]] == [ME, *HOME]
+    # The backend's own log (uvicorn's access log included) names the callback, but never
+    # its one-time code or state.
+    backend_log = next(s for s in servers if s.name == "backend").log.read_text(errors="replace")
+    assert "/api/auth/google/callback" in backend_log
+    for one_time in (callback.query["code"][0], callback.query["state"][0]):
+        assert one_time not in backend_log
+
+
+@covers("test_returning_member_signs_in_with_google")
+def test_returning_sign_in_makes_one_round_trip(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    user_id = unique_user_id("ada")
+    register_and_sign_in(other_page, user_id, "Ada")
+    load_signed_out(page)
 
     with (
         page.expect_response(api("GET", "/api/me/groups")),
         page.expect_response(api("GET", "/api/groups")),
     ):
-        sign_in(page, user_id, typed)
-    # Read the sign-in response now: a reload discards response bodies.
-    signed_in = traffic.api_calls()[2]
-    load_home(page)
+        sign_in_with_google(page, user_id)
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME, REGISTER, SIGN_IN, *HOME, ME, *HOME], (
+    assert routes(calls) == [*routes_of(SIGNED_OUT), START, CALLBACK, *routes_of([ME, *HOME])], (
         traffic.describe()
     )
-    assert signed_in.request_json() == {"user_id": user_id, "password": typed}
-    assert (signed_in.status, signed_in.json()) == (
-        200,
-        {"user_id": user_id, "display_name": "Ada"},
-    )
-    assert calls[5].status == 200
-    for call in (*calls[:2], *calls[3:]):
-        assert typed not in f"{call.url} {call.request_body} {call.body}"
+    assert [call.status for call in calls] == [401, 200, 302, 302, 200, 200, 200]
+    assert calls[4].json() == {
+        "user_id": user_id,
+        "display_name": "Ada",
+        "mobile": "+919876543210",
+    }
 
 
-@covers("test_unregistered_user_id_cannot_sign_in")
-def test_unregistered_sign_in_gets_generic_401(page: Page, traffic: ApiTraffic) -> None:
+@covers("test_cancelling_at_google_says_so")
+def test_cancelling_makes_no_exchange_and_no_session(page: Page, traffic: ApiTraffic) -> None:
     load_signed_out(page)
+    to_google(page)
 
-    sign_in(page, unique_user_id("ghost"))
-    expect(form(page, "Sign in").get_by_role("alert")).to_be_visible()
+    with page.expect_response(api("GET", "/api/auth/providers")):
+        page.get_by_role("button", name="Cancel").click()
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME, SIGN_IN], traffic.describe()
-    assert (calls[1].status, calls[1].json()) == (401, {"detail": "Invalid user ID or password"})
+    assert routes(calls) == [*routes_of(SIGNED_OUT), START, CALLBACK, *routes_of(SIGNED_OUT)], (
+        traffic.describe()
+    )
+    assert calls[3].query["error"] == ["access_denied"]
+    assert calls[3].status == 302
+    assert calls[4].status == 401
+
+
+@covers("test_replayed_callback_in_another_browser_fails")
+def test_replayed_callback_gets_no_session(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    load_signed_out(other_page)
+    to_google(other_page)
+    with other_page.expect_response(lambda r: "/api/auth/google/callback" in r.url) as callback:
+        google_continues(other_page, unique_user_id("ada"), "Ada")
+
+    with page.expect_response(api("GET", "/api/auth/providers")):
+        page.goto(callback.value.url)
+
+    calls = traffic.api_calls()
+    assert routes(calls) == [CALLBACK, *routes_of(SIGNED_OUT)], traffic.describe()
+    assert [call.status for call in calls] == [302, 401, 200]
+    assert urlsplit(page.url).path == "/"
 
 
 @covers("test_sign_out_returns_to_sign_in")
 def test_sign_out_sends_one_request(page: Page, traffic: ApiTraffic) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
 
-    sign_out(page)
-    expect(form(page, "Sign in")).to_be_visible()
+    with page.expect_response(api("GET", "/api/auth/providers")):
+        sign_out(page)
+    expect(google_link(page)).to_be_visible()
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME, REGISTER, SIGN_IN, *HOME, SIGN_OUT], (
+    assert routes(calls) == [*SIGN_UP, *HOME_ROUTES, *routes_of([SIGN_OUT, PROVIDERS])], (
         traffic.describe()
     )
-    assert (calls[-1].status, calls[-1].request_body) == (204, None)
+    assert (calls[-2].status, calls[-2].request_body) == (204, None)
 
 
-@covers("test_register_sign_in_and_see_display_name", "test_shell_shows_the_brand_title_and_icon")
+@covers("test_new_person_signs_up_with_google", "test_shell_shows_the_brand_title_and_icon")
 def test_sign_in_loads_my_groups_and_the_browse_list_once(page: Page, traffic: ApiTraffic) -> None:
     register_and_sign_in(page, unique_user_id("ada"), "Ada")
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME, REGISTER, SIGN_IN, *HOME], traffic.describe()
-    assert (calls[3].status, calls[3].json()) == (200, [])
-    assert calls[4].status == 200
+    assert routes(calls) == [*SIGN_UP, *HOME_ROUTES], traffic.describe()
+    my_groups, browse = calls[len(SIGN_UP)], calls[len(SIGN_UP) + 1]
+    assert (my_groups.status, my_groups.json()) == (200, [])
+    assert browse.status == 200
 
 
 @covers(
@@ -310,20 +406,127 @@ def test_decision_posts_once_then_reloads_the_group(
     assert reloaded["pending_requests"] == []
 
 
-@covers("test_taken_user_id_cannot_register_again")
-def test_taken_user_id_gets_one_generic_409(page: Page, traffic: ApiTraffic) -> None:
+def _keys(value: object) -> set[str]:
+    """Every key anywhere in a JSON body."""
+    if isinstance(value, dict):
+        items = cast(dict[str, object], value)
+        return set(items) | {key for item in items.values() for key in _keys(item)}
+    if isinstance(value, list):
+        return {key for item in cast(list[object], value) for key in _keys(item)}
+    return set()
+
+
+@covers("test_owner_sees_the_requesters_user_id_and_phone")
+def test_member_group_detail_has_no_mobile(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    owner, member = other_page, page
+    name = _owned_group(owner)
+    member_id = unique_user_id("bob")
+    register_and_sign_in(member, member_id, "Bob")
+    search_groups(member, name)
+    with member.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(member, "Browse groups").get_by_role(
+            "button", name=f"Request to join {name}"
+        ).click()
+    open_group(owner, "My groups", name)
+    with owner.expect_response(lambda r: r.url.endswith("/approve")):
+        section(owner, "Pending requests").get_by_role("button", name="Approve Bob").click()
+    load_home(member)
+    before = len(traffic.api_calls())
+
+    open_group(member, "My groups", name)
+
+    calls = traffic.api_calls()[before:]
+    assert len(calls) == 1, traffic.describe()
+    body = _json_object(calls[0])
+    assert "mobile" not in _keys(body), body
+    members = cast(list[dict[str, object]], body["members"])
+    assert {m["user_id"] for m in members} == {body["owner_user_id"], member_id}
+    assert body["pending_requests"] is None
+
+
+@covers("test_owner_sees_the_requesters_user_id_and_phone")
+def test_owner_group_detail_carries_mobiles(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    owner, requester = page, other_page
+    name = _owned_group(owner)
+    requester_id = unique_user_id("bob")
+    load_signed_out(requester)
+    sign_up(requester, requester_id, "Bob", mobile="+44 7700 900123")
+    search_groups(requester, name)
+    with requester.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(requester, "Browse groups").get_by_role(
+            "button", name=f"Request to join {name}"
+        ).click()
+    load_home(owner)
+    before = len(traffic.api_calls())
+
+    open_group(owner, "My groups", name)
+
+    calls = traffic.api_calls()[before:]
+    assert len(calls) == 1, traffic.describe()
+    assert (calls[0].method, calls[0].path.startswith("/api/groups/")) == ("GET", True)
+    body = _json_object(calls[0])
+    members = cast(list[dict[str, object]], body["members"])
+    pending = cast(list[dict[str, object]], body["pending_requests"])
+    assert [(m["user_id"], m["mobile"]) for m in members] == [
+        (body["owner_user_id"], "+919876543210")
+    ]
+    assert [(p["user_id"], p["display_name"], p["mobile"]) for p in pending] == [
+        (requester_id, "Bob", "+447700900123")
+    ]
+
+
+@covers("test_member_changes_their_mobile_number")
+def test_saving_the_profile_posts_once(page: Page, traffic: ApiTraffic) -> None:
     user_id = unique_user_id("ada")
+    register_and_sign_in(page, user_id, "Ada")
+    before = len(traffic.api_calls())
+
+    page.get_by_role("link", name="Profile").click()
+    profile = form(page, "Profile")
+    expect(profile).to_be_visible()
+    profile.get_by_label("Display name").fill("Augusta")
+    profile.get_by_label("Mobile number").fill("+44 7700 900999")
+    with page.expect_response(api("POST", "/api/me/profile")):
+        profile.get_by_role("button", name="Save").dblclick()
+    expect(profile.get_by_role("status")).to_be_visible()
+
+    # Opening Profile needs no call: it shows the session's member. Saving is one POST.
+    calls = traffic.api_calls()[before:]
+    assert routes(calls) == [("POST", "/api/me/profile")], traffic.describe()
+    assert calls[0].request_json() == {"display_name": "Augusta", "mobile": "+44 7700 900999"}
+    assert (calls[0].status, calls[0].json()) == (
+        200,
+        {"user_id": user_id, "display_name": "Augusta", "mobile": "+447700900999"},
+    )
+
+
+@covers("test_taken_user_id_says_so_and_keeps_the_input")
+def test_taken_user_id_gets_one_generic_409(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    user_id = unique_user_id("ada")
+    register_and_sign_in(other_page, user_id, "Ada")
     load_signed_out(page)
-    register(page, user_id, "Ada")
-    expect(form(page, "Register").get_by_role("status")).to_be_visible()
+    to_google(page)
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, unique_user_id("other"), "Other")
+    before = len(traffic.api_calls())
 
-    register(page, user_id.upper(), "Other")
-    expect(form(page, "Register").get_by_role("alert")).to_be_visible()
+    registration = finish_registering(page, user_id.upper(), "Other")
+    expect(registration.get_by_role("alert")).to_be_visible()
 
-    calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME, REGISTER, REGISTER], traffic.describe()
-    assert calls[2].request_json() == {"user_id": user_id.upper(), "display_name": "Other"}
-    assert (calls[2].status, calls[2].json()) == (409, {"detail": "User ID already taken"})
+    calls = traffic.api_calls()[before:]
+    assert routes(calls) == [COMPLETE], traffic.describe()
+    assert calls[0].request_json() == {
+        "user_id": user_id.upper(),
+        "display_name": "Other",
+        "mobile": MOBILE,
+    }
+    assert (calls[0].status, calls[0].json()) == (409, {"detail": "User ID already taken"})
 
 
 @covers("test_unknown_group_name_says_so")
@@ -367,16 +570,24 @@ def test_taken_group_name_gets_one_409_and_no_reload(page: Page, traffic: ApiTra
 
 @covers("test_markup_in_a_display_name_is_never_rendered")
 def test_markup_display_name_is_refused_before_any_request(page: Page, traffic: ApiTraffic) -> None:
+    markup = "<img src=x onerror=alert(1)>"
     load_signed_out(page)
-    register_form = form(page, "Register")
-    register_form.get_by_label("User ID").fill(unique_user_id("eve"))
-    register_form.get_by_label("Display name").fill("<img src=x onerror=alert(1)>")
+    to_google(page)
+    with page.expect_response(api("GET", "/api/auth/registration")):
+        google_continues(page, unique_user_id("eve"), markup)
+    pending = traffic.api_calls()[-1]
+    before = len(traffic.api_calls())
+    registration = form(page, "Finish registering")
+    registration.get_by_label("User ID").fill(unique_user_id("eve"))
+    registration.get_by_label("Display name").fill(markup)
+    registration.get_by_label("Mobile number").fill(MOBILE)
 
-    register_form.get_by_role("button", name="Register").click()
-    expect(register_form.get_by_role("alert")).to_be_visible()
+    registration.get_by_role("button", name="Finish registering").click()
+    expect(registration.get_by_role("alert")).to_be_visible()
 
-    calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME], traffic.describe()
+    # Google's name failed the rule, so it wasn't suggested; and the form sent nothing.
+    assert pending.json() == {"display_name": "", "return_to": "/"}
+    assert traffic.api_calls()[before:] == [], traffic.describe()
 
 
 @covers("test_theme_follows_the_system_colour_scheme")
@@ -386,7 +597,7 @@ def test_dark_theme_needs_no_api_calls(page: Page, traffic: ApiTraffic) -> None:
     load_signed_out(page)
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME], traffic.describe()
+    assert [call.signature for call in calls] == SIGNED_OUT, traffic.describe()
 
 
 @covers("test_skip_link_moves_focus_to_the_main_content")
@@ -398,7 +609,7 @@ def test_skip_link_makes_no_calls(page: Page, traffic: ApiTraffic) -> None:
     expect(page.get_by_role("main")).to_be_focused()
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME], traffic.describe()
+    assert [call.signature for call in calls] == SIGNED_OUT, traffic.describe()
 
 
 def _open_new_group(page: Page, user_id: str) -> tuple[str, str]:
@@ -450,16 +661,20 @@ def test_signing_in_on_a_group_address_loads_only_that_group(
     sign_out(page)
     before = len(traffic.api_calls())
 
-    load(page, path)
+    load_signed_out(page, path)
     with page.expect_response(api("GET", f"/api{path}")):
-        sign_in(page, user_id)
+        sign_in_with_google(page, user_id)
     expect(page.get_by_role("heading", name=name, level=2)).to_be_visible()
 
     calls = traffic.api_calls()[before:]
-    assert [call.signature for call in calls] == [ME, SIGN_IN, ("GET", f"/api{path}", {})], (
-        traffic.describe()
-    )
-    assert [call.status for call in calls] == [401, 200, 200]
+    assert routes(calls) == [
+        *routes_of(SIGNED_OUT),
+        START,
+        CALLBACK,
+        *routes_of([ME, ("GET", f"/api{path}", {})]),
+    ], traffic.describe()
+    assert calls[2].query == {"return_to": [path]}
+    assert [call.status for call in calls] == [401, 200, 302, 302, 200, 200]
 
 
 @pytest.mark.parametrize("path", ["/nowhere", "/groups/abc"])
@@ -535,7 +750,7 @@ def test_resizing_the_signed_out_screen_makes_no_calls(page: Page, traffic: ApiT
     expect(page.get_by_role("region", name="Plan trips together.")).to_be_visible()
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME], traffic.describe()
+    assert [call.signature for call in calls] == SIGNED_OUT, traffic.describe()
 
 
 @covers(
@@ -550,9 +765,7 @@ def test_a_phone_screen_makes_the_same_calls(page: Page, traffic: ApiTraffic) ->
     create_group(page, unique_group_name("Goa"))
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls[:before]] == [ME, REGISTER, SIGN_IN, *HOME], (
-        traffic.describe()
-    )
+    assert routes(calls[:before]) == [*SIGN_UP, *HOME_ROUTES], traffic.describe()
     assert [call.signature for call in calls[before:]] == [CREATE, MY_GROUPS], traffic.describe()
 
 
@@ -567,7 +780,7 @@ def test_motion_and_font_preferences_make_no_calls(page: Page, traffic: ApiTraff
     load_signed_out(page)
 
     calls = traffic.api_calls()
-    assert [call.signature for call in calls] == [ME], traffic.describe()
+    assert [call.signature for call in calls] == SIGNED_OUT, traffic.describe()
 
 
 @covers("test_sign_out_returns_to_sign_in")
@@ -575,9 +788,11 @@ def test_sign_out_from_a_group_sends_only_the_sign_out(page: Page, traffic: ApiT
     _open_new_group(page, unique_user_id("ada"))
     before = len(traffic.api_calls())
 
-    sign_out(page)
-    expect(form(page, "Sign in")).to_be_visible()
+    with page.expect_response(api("GET", "/api/auth/providers")):
+        sign_out(page)
+    expect(google_link(page)).to_be_visible()
 
+    # The signed-out screen asks which providers there are; home never loads on the way.
     calls = traffic.api_calls()[before:]
-    assert [call.signature for call in calls] == [SIGN_OUT], traffic.describe()
+    assert [call.signature for call in calls] == [SIGN_OUT, PROVIDERS], traffic.describe()
     assert urlsplit(page.url).path == "/"

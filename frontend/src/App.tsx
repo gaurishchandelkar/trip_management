@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, Route, Routes, useNavigate } from "react-router";
 
 import { getMe, type Member, SignedOutError, signOut } from "./api";
 import { AppRoutes } from "./AppRoutes";
 import { alert, type Feedback, FeedbackMessage, UNAVAILABLE } from "./Feedback";
+import { FinishRegistration } from "./FinishRegistration";
 import { SignedOut } from "./SignedOut";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { Logo } from "./ui/Logo";
+import { userIdLabel } from "./ui/PersonDetails";
 import { Skeleton } from "./ui/Skeleton";
 import { PRODUCT_NAME, useDocumentTitle } from "./useDocumentTitle";
 
@@ -35,7 +37,11 @@ function SessionMenu({ member, onSignedOut }: { member: Member; onSignedOut: () 
       <Avatar name={member.display_name} />
       <p className="app-header__name">
         Signed in as <strong>{member.display_name}</strong>
+        <span className="app-header__user-id">{userIdLabel(member.user_id)}</span>
       </p>
+      <Link to="/profile" className="app-header__profile">
+        Profile
+      </Link>
       <Button
         variant="ghost"
         busy={busy}
@@ -57,7 +63,7 @@ function SessionMenu({ member, onSignedOut }: { member: Member; onSignedOut: () 
   );
 }
 
-function SignInScreen({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
+function SignInScreen() {
   useDocumentTitle("Sign in");
   return (
     <div className="welcome-layout">
@@ -71,8 +77,18 @@ function SignInScreen({ onSignedIn }: { onSignedIn: (member: Member) => void }) 
           group&apos;s owner decides who&apos;s in.
         </p>
       </section>
-      <SignedOut onSignedIn={onSignedIn} />
+      <SignedOut />
     </div>
+  );
+}
+
+/** Signed out: finishing a Google registration, or the sign-in screen at any other address. */
+function SignedOutRoutes({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
+  return (
+    <Routes>
+      <Route path="/register/complete" element={<FinishRegistration onSignedIn={onSignedIn} />} />
+      <Route path="*" element={<SignInScreen />} />
+    </Routes>
   );
 }
 
@@ -127,13 +143,21 @@ export function App() {
         {session.status === "loading" && <Skeleton rows={2} />}
         {session.status === "unavailable" && <FeedbackMessage feedback={alert(UNAVAILABLE)} />}
         {session.status === "signed-out" && (
-          <SignInScreen
+          <SignedOutRoutes
             onSignedIn={(member) => {
               setSession({ status: "signed-in", member });
             }}
           />
         )}
-        {session.status === "signed-in" && <AppRoutes onSignedOut={signedOut} />}
+        {session.status === "signed-in" && (
+          <AppRoutes
+            member={session.member}
+            onSignedOut={signedOut}
+            onProfileSaved={(member) => {
+              setSession({ status: "signed-in", member });
+            }}
+          />
+        )}
       </main>
     </>
   );

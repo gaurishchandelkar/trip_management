@@ -43,6 +43,11 @@
   --color-avatar-text: #9a3412;
   --color-avatar-bg: #fff1eb;
   --color-skeleton: #e2e8f0;
+  /* Google's mark keeps its own colours in both themes. */
+  --color-google-blue: #4285f4;
+  --color-google-green: #34a853;
+  --color-google-yellow: #fbbc05;
+  --color-google-red: #ea4335;
 
   /* Type */
   --font-sans:

@@ -2,7 +2,7 @@
 
 export const USER_ID_MAX_LENGTH = 30;
 export const DISPLAY_NAME_MAX_LENGTH = 50;
-export const PASSWORD_MAX_LENGTH = 128;
+export const MOBILE_MAX_LENGTH = 20;
 
 const USER_ID = /^[A-Za-z][A-Za-z0-9_-]{2,29}$/;
 const DISPLAY_NAME = /^\p{L}+(?:[ '-]\p{L}+)*$/u;
@@ -22,6 +22,18 @@ export function isValidUserId(value: string): boolean {
 
 export function isValidDisplayName(value: string): boolean {
   return value.length <= DISPLAY_NAME_MAX_LENGTH && DISPLAY_NAME.test(value);
+}
+
+// "+", a country code that doesn't start with 0, 8 to 15 digits in all. Spaces and hyphens
+// between digits are fine; the server stores the number without them.
+const MOBILE = /^\+[1-9][0-9]{7,14}$/;
+
+export const MOBILE_HINT =
+  "Enter your mobile number with the country code, for example +91 98765 43210.";
+export const MOBILE_RULE = "With the country code, for example +91 98765 43210.";
+
+export function isValidMobile(value: string): boolean {
+  return value.length <= MOBILE_MAX_LENGTH && MOBILE.test(value.replace(/[ -]/g, ""));
 }
 
 export const GROUP_NAME_MAX_LENGTH = 60;

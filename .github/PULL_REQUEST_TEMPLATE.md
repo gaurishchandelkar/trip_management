@@ -23,7 +23,7 @@
 <paste the npm run check stage summary>
 ```
 
-UI screenshots: open this PR's CI run and download the `ui-screenshots` artifact. The functional job's summary lists all 20.
+UI screenshots: open this PR's CI run and download the `ui-screenshots` artifact. The functional job's summary lists all 24.
 
 ## Reviewer findings not addressed
 

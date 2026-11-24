@@ -40,6 +40,7 @@ function group(overrides: Partial<Group> = {}): Group {
     group_id: 1,
     name: "Goa 2027",
     description: "Beach week",
+    owner_user_id: "ada",
     owner_display_name: "Ada",
     member_count: 1,
     my_status: "none",
@@ -60,10 +61,12 @@ beforeEach(() => {
   vi.mocked(browseGroups).mockResolvedValue([]);
 });
 
+const ME = { user_id: "ada", display_name: "Ada", mobile: "+919876543210" };
+
 function renderRoutes(path = "/") {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <AppRoutes onSignedOut={onSignedOut} />
+      <AppRoutes member={ME} onSignedOut={onSignedOut} onProfileSaved={vi.fn()} />
     </MemoryRouter>,
   );
 }
@@ -94,7 +97,13 @@ describe("home", () => {
     vi.mocked(getMyGroups).mockResolvedValue([group({ my_status: "owner" })]);
     vi.mocked(browseGroups).mockResolvedValue([
       group({ my_status: "owner" }),
-      group({ group_id: 2, name: "Ladakh", owner_display_name: "Bob", member_count: 3 }),
+      group({
+        group_id: 2,
+        name: "Ladakh",
+        owner_user_id: "bob",
+        owner_display_name: "Bob",
+        member_count: 3,
+      }),
       group({ group_id: 3, name: "Kerala", my_status: "pending" }),
     ]);
 
@@ -104,7 +113,7 @@ describe("home", () => {
     expect(await within(mine).findByRole("link", { name: "Goa 2027" })).toBeInTheDocument();
     expect(within(mine).getByText("You own this group")).toBeInTheDocument();
     const browse = section("Browse groups");
-    expect(await within(browse).findByText("by Bob, 3 members")).toBeInTheDocument();
+    expect(await within(browse).findByText("by Bob (@bob), 3 members")).toBeInTheDocument();
     expect(within(browse).getByRole("button", { name: "Request to join Ladakh" })).toBeEnabled();
     expect(within(browse).getByText("Request pending")).toBeInTheDocument();
     expect(within(browse).queryByRole("button", { name: "Request to join Goa 2027" })).toBeNull();
@@ -126,6 +135,22 @@ describe("home", () => {
     renderRoutes();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
+  });
+});
+
+describe("group cards", () => {
+  it("cards show the owner's name and user ID", async () => {
+    vi.mocked(getMyGroups).mockResolvedValue([]);
+    vi.mocked(browseGroups).mockResolvedValue([
+      group({ owner_user_id: "ada", owner_display_name: "Ada Lovelace", member_count: 2 }),
+      group({ group_id: 2, name: "Ladakh", owner_user_id: "ada2", owner_display_name: "Ada" }),
+    ]);
+
+    renderRoutes();
+
+    const browse = section("Browse groups");
+    expect(await within(browse).findByText("by Ada Lovelace (@ada), 2 members")).toBeVisible();
+    expect(within(browse).getByText("by Ada (@ada2), 1 member")).toBeVisible();
   });
 });
 
@@ -441,24 +466,98 @@ describe("group detail", () => {
   it("shows the owner the members and pending requests", async () => {
     await open(
       detail({
-        members: [{ display_name: "Ada" }],
-        pending_requests: [{ request_id: 7, display_name: "Bob" }],
+        members: [{ user_id: "ada", display_name: "Ada" }],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
       }),
     );
 
     expect(getGroup).toHaveBeenCalledWith(1);
     expect(screen.getByText("Beach week")).toBeInTheDocument();
     expect(within(section("Members")).getByText("Ada")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve Bob" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reject Bob" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve Bob (@bob)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject Bob (@bob)" })).toBeInTheDocument();
   });
 
   it("shows a non-member only the summary", async () => {
     await open(detail({ my_status: "none" }));
 
-    expect(screen.getByText("Owner: Ada. 1 member.")).toBeInTheDocument();
+    expect(screen.getByText("Owner: Ada (@ada). 1 member.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Members" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Pending requests" })).toBeNull();
+  });
+
+  it("the owner sees phone links for members and requests", async () => {
+    await open(
+      detail({
+        my_status: "owner",
+        members: [{ user_id: "ada", display_name: "Ada", mobile: "+919876543210" }],
+        pending_requests: [
+          { request_id: 7, user_id: "bob", display_name: "Bob", mobile: "+447700900123" },
+        ],
+      }),
+    );
+
+    const adaPhone = within(section("Members")).getByRole("link", { name: /Call Ada/ });
+    expect(adaPhone).toHaveAttribute("href", "tel:+919876543210");
+    expect(adaPhone).toHaveTextContent("+919876543210");
+    expect(adaPhone).toHaveAccessibleName("Call Ada (@ada) on +919876543210");
+    const bobPhone = within(section("Pending requests")).getByRole("link", { name: /Call Bob/ });
+    expect(bobPhone).toHaveAttribute("href", "tel:+447700900123");
+  });
+
+  it("a member sees no phone links", async () => {
+    await open(
+      detail({
+        my_status: "member",
+        members: [
+          { user_id: "ada", display_name: "Ada" },
+          { user_id: "bob", display_name: "Bob" },
+        ],
+        pending_requests: null,
+      }),
+    );
+
+    const members = section("Members");
+    expect(within(members).getByText("@bob")).toBeInTheDocument();
+    expect(within(members).queryByRole("link")).toBeNull();
+    expect(document.querySelector('a[href^="tel:"]')).toBeNull();
+  });
+
+  it("people show their user ID beside their name", async () => {
+    await open(
+      detail({
+        my_status: "owner",
+        members: [{ user_id: "ada", display_name: "Ada Lovelace", mobile: "+919876543210" }],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
+      }),
+    );
+
+    const ada = within(section("Members")).getByText("Ada Lovelace");
+    expect(ada.nextElementSibling).toHaveTextContent("@ada");
+    expect(ada.nextElementSibling).toHaveClass("person__id");
+    const bob = within(section("Pending requests")).getByText("Bob");
+    expect(bob.nextElementSibling).toHaveTextContent("@bob");
+    expect(screen.getByRole("button", { name: "Approve Bob (@bob)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject Bob (@bob)" })).toBeInTheDocument();
+  });
+
+  it("two people with the same name are told apart by user ID", async () => {
+    await open(
+      detail({
+        my_status: "owner",
+        members: [{ user_id: "ada", display_name: "Ada" }],
+        pending_requests: [
+          { request_id: 7, user_id: "ada2", display_name: "Ada" },
+          { request_id: 8, user_id: "ada3", display_name: "Ada" },
+        ],
+      }),
+    );
+
+    const requests = section("Pending requests");
+    expect(within(requests).getByText("@ada2")).toBeInTheDocument();
+    expect(within(requests).getByText("@ada3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve Ada (@ada2)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve Ada (@ada3)" })).toBeInTheDocument();
   });
 
   it("says when there are no pending requests", async () => {
@@ -468,10 +567,15 @@ describe("group detail", () => {
   });
 
   it.each([
-    ["Approve Bob", approve],
-    ["Reject Bob", reject],
+    ["Approve Bob (@bob)", approve],
+    ["Reject Bob (@bob)", reject],
   ])("%s calls the API, then reloads the group", async (button, call) => {
-    await open(detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }));
+    await open(
+      detail({
+        members: [],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
+      }),
+    );
     vi.mocked(call).mockResolvedValue({ ...PENDING, status: "approved" });
     vi.mocked(getGroup).mockResolvedValue(detail({ members: [], pending_requests: [] }));
 
@@ -483,11 +587,16 @@ describe("group detail", () => {
   });
 
   it("reloads quietly when the request was already decided", async () => {
-    await open(detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }));
+    await open(
+      detail({
+        members: [],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
+      }),
+    );
     vi.mocked(approve).mockRejectedValue(new NotFoundError(404));
     vi.mocked(getGroup).mockResolvedValue(detail({ members: [], pending_requests: [] }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Approve Bob" }));
+    await userEvent.click(screen.getByRole("button", { name: "Approve Bob (@bob)" }));
 
     expect(await screen.findByText("No pending requests.")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -497,19 +606,29 @@ describe("group detail", () => {
     [new ConflictError("limit-reached"), "Limit reached."],
     [new UnavailableError(503), "Something went wrong"],
   ])("shows a message when a decision fails with %O", async (error, message) => {
-    await open(detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }));
+    await open(
+      detail({
+        members: [],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
+      }),
+    );
     vi.mocked(approve).mockRejectedValue(error);
 
-    await userEvent.click(screen.getByRole("button", { name: "Approve Bob" }));
+    await userEvent.click(screen.getByRole("button", { name: "Approve Bob (@bob)" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
 
   it("returns to sign-in when a decision finds the session gone", async () => {
-    await open(detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }));
+    await open(
+      detail({
+        members: [],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
+      }),
+    );
     vi.mocked(reject).mockRejectedValue(new SignedOutError(401));
 
-    await userEvent.click(screen.getByRole("button", { name: "Reject Bob" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reject Bob (@bob)" }));
 
     await vi.waitFor(() => {
       expect(onSignedOut).toHaveBeenCalled();
@@ -704,7 +823,10 @@ describe("while a request is in flight", () => {
   it("sends one decision for a double click, and holds both buttons", async () => {
     vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "owner" })]);
     vi.mocked(getGroup).mockResolvedValue(
-      detail({ members: [], pending_requests: [{ request_id: 7, display_name: "Bob" }] }),
+      detail({
+        members: [],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
+      }),
     );
     vi.mocked(approve).mockReturnValue(inFlight());
     renderRoutes();
@@ -712,10 +834,10 @@ describe("while a request is in flight", () => {
       await within(section("Browse groups")).findByRole("link", { name: "Goa 2027" }),
     );
 
-    await userEvent.dblClick(await screen.findByRole("button", { name: "Approve Bob" }));
+    await userEvent.dblClick(await screen.findByRole("button", { name: "Approve Bob (@bob)" }));
 
     expect(approve).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Reject Bob" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reject Bob (@bob)" })).toBeDisabled();
   });
 });
 
@@ -762,8 +884,8 @@ describe("status badges", () => {
     vi.mocked(browseGroups).mockResolvedValue([group({ my_status: "owner" })]);
     vi.mocked(getGroup).mockResolvedValue(
       detail({
-        members: [{ display_name: "Ada Lovelace" }],
-        pending_requests: [{ request_id: 7, display_name: "Bob" }],
+        members: [{ user_id: "ada", display_name: "Ada Lovelace" }],
+        pending_requests: [{ request_id: 7, user_id: "bob", display_name: "Bob" }],
       }),
     );
     renderRoutes();
@@ -774,8 +896,10 @@ describe("status badges", () => {
 
     expect(await within(section("Members")).findByText("AL")).toHaveClass("avatar");
     expect(within(section("Pending requests")).getByText("B")).toHaveClass("avatar");
-    expect(screen.getByRole("button", { name: "Approve Bob" })).toHaveClass("button--primary");
-    expect(screen.getByRole("button", { name: "Reject Bob" })).toHaveClass("button--danger");
+    expect(screen.getByRole("button", { name: "Approve Bob (@bob)" })).toHaveClass(
+      "button--primary",
+    );
+    expect(screen.getByRole("button", { name: "Reject Bob (@bob)" })).toHaveClass("button--danger");
   });
 });
 
@@ -789,8 +913,8 @@ describe("rendering untrusted text", () => {
       detail({
         name: markup,
         description: markup,
-        members: [{ display_name: markup }],
-        pending_requests: [{ request_id: 7, display_name: markup }],
+        members: [{ user_id: "eve", display_name: markup }],
+        pending_requests: [{ request_id: 7, user_id: "mallory", display_name: markup }],
       }),
     );
     const { container } = renderRoutes();

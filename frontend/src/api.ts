@@ -1,6 +1,16 @@
 export interface Member {
   user_id: string;
   display_name: string;
+  /** International format, "+" and digits. Only the member and group owners ever see it. */
+  mobile: string;
+}
+
+/** A Google account with no member yet, waiting for a user ID and mobile number. */
+export interface PendingRegistration {
+  /** Google's name when it passes the display-name rule, otherwise empty. */
+  display_name: string;
+  /** The app path to land on once registered. */
+  return_to: string;
 }
 
 export class ApiError extends Error {
@@ -12,7 +22,7 @@ export class ApiError extends Error {
 
 /** 422: the server's validation refused the input. */
 export class InvalidInputError extends ApiError {}
-/** 401: no session, or sign-in with an unknown user ID. */
+/** 401: no session, or no usable pending registration. */
 export class SignedOutError extends ApiError {}
 export class ForbiddenError extends ApiError {}
 export class NotFoundError extends ApiError {}
@@ -21,6 +31,7 @@ export class UnavailableError extends ApiError {}
 
 export type ConflictReason =
   | "user-id-taken"
+  | "account-linked"
   | "group-name-taken"
   | "request-pending"
   | "already-member"
@@ -30,6 +41,7 @@ export type ConflictReason =
 // The server's fixed 409 bodies. The UI shows its own text for each, never the server's.
 const CONFLICTS: Record<string, ConflictReason> = {
   "User ID already taken": "user-id-taken",
+  "Account already linked": "account-linked",
   "Group name already taken": "group-name-taken",
   "Request already pending": "request-pending",
   "Already a member": "already-member",
@@ -88,12 +100,34 @@ async function json<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   return (await response.json()) as T;
 }
 
-export function register(userId: string, displayName: string): Promise<Member> {
-  return json("POST", "/api/members", { user_id: userId, display_name: displayName });
+/** The providers people can sign in with: `["google"]`, or none when sign-in isn't set up. */
+export async function getProviders(): Promise<string[]> {
+  const body = await json<{ providers: string[] }>("GET", "/api/auth/providers");
+  return body.providers;
 }
 
-export function signIn(userId: string, password: string): Promise<Member> {
-  return json("POST", "/api/sign-in", { user_id: userId, password });
+/**
+ * Where the browser goes to sign in with Google. It's a navigation, not a fetch: the backend
+ * redirects to Google, and Google sends the browser back to `returnTo` (a path in the app).
+ */
+export function googleSignInUrl(returnTo: string): string {
+  return `/api/auth/google/start?${new URLSearchParams({ return_to: returnTo }).toString()}`;
+}
+
+export function getPendingRegistration(): Promise<PendingRegistration> {
+  return json("GET", "/api/auth/registration");
+}
+
+export function completeRegistration(
+  userId: string,
+  displayName: string,
+  mobile: string,
+): Promise<Member> {
+  return json("POST", "/api/auth/registration", {
+    user_id: userId,
+    display_name: displayName,
+    mobile,
+  });
 }
 
 export async function signOut(): Promise<void> {
@@ -104,26 +138,35 @@ export function getMe(): Promise<Member> {
   return json("GET", "/api/me");
 }
 
+/** Saves the display name and mobile together. The user ID can't change. */
+export function updateProfile(displayName: string, mobile: string): Promise<Member> {
+  return json("POST", "/api/me/profile", { display_name: displayName, mobile });
+}
+
 export type MembershipStatus = "owner" | "member" | "pending" | "none";
 
 export interface Group {
   group_id: number;
   name: string;
   description: string;
+  owner_user_id: string;
   owner_display_name: string;
   member_count: number;
   my_status: MembershipStatus;
 }
 
-export interface PendingRequest {
-  request_id: number;
+/** Someone in a group's lists. `mobile` is there only when the viewer owns the group. */
+export interface Person {
+  user_id: string;
   display_name: string;
+  mobile?: string;
 }
 
-/** Co-members are shown by name only: until passwords are checked, a user ID signs you in. */
-export interface GroupMember {
-  display_name: string;
+export interface PendingRequest extends Person {
+  request_id: number;
 }
+
+export type GroupMember = Person;
 
 export interface GroupDetail extends Group {
   /** null when the viewer may not see the list. */

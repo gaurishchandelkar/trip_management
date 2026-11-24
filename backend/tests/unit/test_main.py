@@ -11,7 +11,8 @@ from backend.storage.store import Store
 def test_create_app_registers_api_routes(tmp_path: Path) -> None:
     paths = create_app(tmp_path / "trip.db").openapi()["paths"]
 
-    assert {"/api/health", "/api/members", "/api/sign-in", "/api/groups"} <= paths.keys()
+    assert {"/api/health", "/api/me", "/api/auth/google/start", "/api/groups"} <= paths.keys()
+    assert not {"/api/members", "/api/sign-in"} & paths.keys()
 
 
 def test_health_reports_ok() -> None:

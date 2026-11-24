@@ -3,9 +3,9 @@ import secrets
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from backend.domain.errors import InvalidCredentialsError, UnauthenticatedError
+from backend.domain.errors import UnauthenticatedError
 from backend.domain.models import SESSION_LIFETIME, Member, Session, hash_token
-from backend.storage.store import Store
+from backend.storage.store import Store, Transaction
 
 type Clock = Callable[[], datetime]
 
@@ -16,27 +16,34 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def register(store: Store, user_id: str, display_name: str) -> Member:
-    member = Member(user_id=user_id, display_name=display_name)
-    with store.transaction() as tx:
-        tx.add_member(member)
-    return member
-
-
-def sign_in(store: Store, user_id: str, now: Clock = utc_now) -> tuple[Member, str]:
-    """Starts a session for a registered member. Returns the member and the session token."""
+def start_session(tx: Transaction, user_id: str, now: Clock) -> str:
+    """Stores a new session for the member and returns its token. Only the hash is stored."""
     token = secrets.token_urlsafe(32)
+    tx.add_session(
+        Session(token_hash=hash_token(token), user_id=user_id, expires_at=now() + SESSION_LIFETIME)
+    )
+    return token
+
+
+def update_profile(store: Store, member: Member, display_name: str, mobile: str) -> Member:
+    """Saves the member's display name and mobile together. The user ID stays as it is."""
+    updated = Member(user_id=member.user_id, display_name=display_name, mobile=mobile)
     with store.transaction() as tx:
-        member = tx.get_member(user_id)
-        if member is None:
-            raise InvalidCredentialsError
-        tx.add_session(
-            Session(
-                token_hash=hash_token(token), user_id=user_id, expires_at=now() + SESSION_LIFETIME
-            )
+        before = tx.get_member(member.user_id)
+        if before is None:
+            raise UnauthenticatedError
+        tx.update_member(updated)
+    changed = [
+        field
+        for field, old, new in (
+            ("display_name", before.display_name, display_name),
+            ("mobile", before.mobile, mobile),
         )
-    logger.info("signed in user_id=%s", user_id)
-    return member, token
+        if old != new
+    ]
+    # Which fields changed, never their values: names and numbers stay out of the logs.
+    logger.info("profile updated user_id=%s fields=%s", member.user_id, ",".join(changed) or "none")
+    return updated
 
 
 def sign_out(store: Store, token: str) -> None:

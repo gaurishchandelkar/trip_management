@@ -8,6 +8,15 @@ MAX_OWNED_GROUPS = 20
 MAX_PENDING_REQUESTS = 20
 BROWSE_LIMIT = 50
 SESSION_LIFETIME = timedelta(days=7)
+DISPLAY_NAME_MAX_LENGTH = 50
+# A sign-in that leaves for the provider, and a registration waiting for its user ID, each
+# have 10 minutes. At most 1,000 of each are open at once, so the tables can't grow unbounded.
+SIGN_IN_LIFETIME = timedelta(minutes=10)
+MAX_OPEN_SIGN_INS = 1000
+MAX_PENDING_REGISTRATIONS = 1000
+# Signing in again with the same new account keeps its newest few, so a second tab still
+# works but one account can't fill the table on its own.
+MAX_PENDING_PER_ACCOUNT = 3
 
 
 class MembershipStatus(StrEnum):
@@ -25,8 +34,50 @@ class RequestStatus(StrEnum):
 
 @dataclass(frozen=True)
 class Member:
+    """A member. The user ID is the key everywhere; the display name and mobile are only shown."""
+
     user_id: str
     display_name: str
+    mobile: str
+
+
+@dataclass(frozen=True)
+class Identity:
+    """Who the identity provider says signed in. `name` is only ever a suggestion."""
+
+    subject: str
+    name: str | None
+
+
+@dataclass(frozen=True)
+class SignInFlow:
+    """A sign-in waiting for the provider to send the browser back. Used once."""
+
+    flow_hash: str
+    provider: str
+    state_hash: str
+    nonce: str
+    code_verifier: str
+    return_to: str
+    expires_at: datetime
+
+    def expired(self, now: datetime) -> bool:
+        return now >= self.expires_at
+
+
+@dataclass(frozen=True)
+class PendingRegistration:
+    """A verified identity with no member yet, waiting for a user ID and mobile number."""
+
+    token_hash: str
+    provider: str
+    subject: str
+    suggested_name: str
+    return_to: str
+    expires_at: datetime
+
+    def expired(self, now: datetime) -> bool:
+        return now >= self.expires_at
 
 
 @dataclass(frozen=True)
@@ -51,17 +102,31 @@ class GroupSummary:
 
 
 @dataclass(frozen=True)
+class Person:
+    """A member as someone else sees them. `mobile` is None unless the viewer may see it."""
+
+    user_id: str
+    display_name: str
+    mobile: str | None
+
+
+@dataclass(frozen=True)
 class PendingRequest:
     request_id: int
-    display_name: str
+    requester: Person
 
 
 @dataclass(frozen=True)
 class GroupDetail:
     summary: GroupSummary
     # None means the viewer may not see the list, which differs from an empty list.
-    members: tuple[Member, ...] | None
+    members: tuple[Person, ...] | None
     pending_requests: tuple[PendingRequest, ...] | None
+
+
+def can_see_mobiles(viewer_status: MembershipStatus) -> bool:
+    """Only a group's owner sees the mobile numbers of its members and requesters (spec D7)."""
+    return viewer_status == MembershipStatus.OWNER
 
 
 @dataclass(frozen=True)

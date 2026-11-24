@@ -22,6 +22,10 @@ class AlreadyMemberError(ConflictError):
     pass
 
 
+class AccountAlreadyLinkedError(ConflictError):
+    pass
+
+
 class LimitReachedError(DomainError):
     pass
 
@@ -42,5 +46,9 @@ class StorageUnavailableError(DomainError):
     pass
 
 
-class InvalidCredentialsError(UnauthenticatedError):
-    pass
+class ProviderUnavailableError(DomainError):
+    """The identity provider timed out, failed, or answered with something unreadable."""
+
+
+class IdentityRejectedError(DomainError):
+    """The provider's ID token failed a check: signature, issuer, audience, expiry or nonce."""

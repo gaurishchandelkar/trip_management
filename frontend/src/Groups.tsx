@@ -19,6 +19,7 @@ import { Dialog } from "./ui/Dialog";
 import { EmptyState } from "./ui/EmptyState";
 import { Field } from "./ui/Field";
 import { Icon } from "./ui/Icon";
+import { ownerLabel } from "./ui/PersonDetails";
 import { Skeleton } from "./ui/Skeleton";
 import { useDocumentTitle } from "./useDocumentTitle";
 import {
@@ -52,7 +53,7 @@ function GroupCard({ group, action }: { group: Group; action?: ReactNode }) {
         <p className="meta">
           <Icon name="users" />
           <span>
-            by {group.owner_display_name}, {group.member_count}{" "}
+            by {ownerLabel(group)}, {group.member_count}{" "}
             {group.member_count === 1 ? "member" : "members"}
           </span>
         </p>

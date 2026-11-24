@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,11 +10,19 @@ from backend.domain.errors import (
     StorageUnavailableError,
     UserIdTakenError,
 )
-from backend.domain.models import Member, MembershipStatus, RequestStatus, Session
-from backend.storage.store import Store
+from backend.domain.models import (
+    Member,
+    MembershipStatus,
+    PendingRequest,
+    Person,
+    RequestStatus,
+    Session,
+)
+from backend.storage.store import OutdatedDatabaseError, Store
 
-ADA = Member(user_id="ada", display_name="Ada Lovelace")
-BOB = Member(user_id="bob", display_name="Bob")
+MOBILE = "+919876543210"
+ADA = Member(user_id="ada", display_name="Ada Lovelace", mobile=MOBILE)
+BOB = Member(user_id="bob", display_name="Bob", mobile=MOBILE)
 
 
 @pytest.fixture
@@ -34,6 +43,20 @@ def test_schema_is_created_on_a_fresh_file(tmp_path: Path) -> None:
     assert path.is_file()
 
 
+def test_old_database_stops_startup(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as old:
+        # The members table as it was before mobile numbers.
+        old.execute("CREATE TABLE members (user_id VARCHAR(30) PRIMARY KEY, display_name TEXT)")
+
+    with pytest.raises(OutdatedDatabaseError, match=r"Delete trip\.db"):
+        Store(path).create_schema()
+    # Left as it was: no new tables were added to the old file.
+    with sqlite3.connect(path) as old:
+        tables = old.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    assert tables == [("members",)]
+
+
 def test_create_schema_is_idempotent(store: Store) -> None:
     store.create_schema()
 
@@ -43,7 +66,7 @@ def test_create_schema_is_idempotent(store: Store) -> None:
 
 def test_a_transaction_that_raises_leaves_no_rows(store: Store) -> None:
     with pytest.raises(RuntimeError), store.transaction() as tx:
-        tx.add_member(Member(user_id="carol", display_name="Carol"))
+        tx.add_member(Member(user_id="carol", display_name="Carol", mobile=MOBILE))
         raise RuntimeError
 
     with store.transaction() as tx:
@@ -52,7 +75,7 @@ def test_a_transaction_that_raises_leaves_no_rows(store: Store) -> None:
 
 def test_duplicate_user_id_is_refused(store: Store) -> None:
     with pytest.raises(UserIdTakenError), store.transaction() as tx:
-        tx.add_member(Member(user_id="ada", display_name="Another Ada"))
+        tx.add_member(Member(user_id="ada", display_name="Another Ada", mobile=MOBILE))
 
 
 def test_duplicate_group_name_is_refused_ignoring_case(store: Store) -> None:
@@ -116,7 +139,7 @@ def test_sessions_round_trip_and_delete(store: Store) -> None:
 
 def test_group_summaries_report_counts_and_viewer_status(store: Store) -> None:
     with store.transaction() as tx:
-        tx.add_member(Member(user_id="carol", display_name="Carol"))
+        tx.add_member(Member(user_id="carol", display_name="Carol", mobile=MOBILE))
         goa = tx.add_group("Goa", "Beach", "ada")
         tx.add_membership(goa, "bob")
         tx.add_join_request(goa, "carol")
@@ -171,13 +194,13 @@ def test_group_lookups_members_and_pending_requests(store: Store) -> None:
         assert tx.find_group_id("GOA") == goa
         assert tx.find_group_id("Nowhere") is None
         assert tx.group_summary(goa + 1, "ada") is None
-        assert tx.group_members(goa) == (ADA,)
+        assert tx.group_members(goa) == (Person("ada", "Ada Lovelace", MOBILE),)
         assert tx.count_owned_groups("ada") == 1
         assert tx.count_pending_requests("bob") == 1
         assert tx.get_pending_request(request.request_id) == request
-        assert [(p.request_id, p.display_name) for p in tx.pending_requests(goa)] == [
-            (request.request_id, "Bob")
-        ]
+        assert tx.pending_requests(goa) == (
+            PendingRequest(request.request_id, Person("bob", "Bob", MOBILE)),
+        )
 
 
 def test_storage_errors_never_carry_the_bound_values(store: Store) -> None:
