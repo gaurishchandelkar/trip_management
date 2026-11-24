@@ -53,6 +53,8 @@ The frontend follows the same idea: components render, `api.ts` talks to the bac
 - A script whose exit code CI relies on gets a test that runs it as CI does, with `spawnSync`, and checks that exit code for a pass and a failure (`scripts/check.test.mjs`). *Enforced by:* `scripts/harness-config.test.mjs`, for every `node scripts/<name>.mjs` in `ci.yml`.
 - Tests are deterministic, with no real network calls, sleeps or order dependence.
 - Tests never see the developer's `TRIP_*` settings. A test that needs one sets it with `monkeypatch.setenv`. *Enforced by:* the autouse fixture in `backend/tests/conftest.py`, and `backend/tests/unit/test_test_isolation.py`.
+- A test that something gets removed first puts it there, so it fails even where nothing was there to begin with, such as CI's clean environment (`backend/tests/unit/test_test_isolation.py`).
+- A new guard rule ships with test cases for the commands that must stay silent: a grep or rg pattern with `|` alternation, a multi-line commit message and a heredoc body, a command piped into `tee`, and an absolute path (`.claude/hooks/guard.test.mjs`).
 - Make time and concurrency deterministic: inject the clock through a FastAPI dependency and override it in tests (`app.dependency_overrides`), and test races with threads started together on a `threading.Barrier`, never with sleeps.
 - Assert through public interfaces: HTTP responses, the OpenAPI schema, the rendered DOM. Never assert on framework internals.
 - A test of an outcome also proves its trigger happened. "Text shows when the font fails" asserts the font was requested and refused; "no extra calls" asserts the expected call was made. Otherwise the test passes when nothing happens at all.

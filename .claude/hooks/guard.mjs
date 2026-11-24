@@ -16,13 +16,42 @@ const SHELL_RULES = [
     "Never disable git hooks.",
   ],
   [ENV_FILE, "Never access .env files. Ask a human to set secrets."],
-  // A human opens PRs (docs/PROCESS.md). Matched where a command starts, so text that only
-  // mentions `npm run pr` (a grep, a commit message) still runs.
-  [
-    /(?:^|[;&|(]\s*|\n\s*)(?:npm\s+run\s+pr(?:\s|$)|node\s+\S*open-pr\.mjs|["']?(?:[^"'\n]*[/\\])?gh(?:\.exe)?["']?\s+pr\s+create\b)/,
-    "Agents never open PRs. Give the human `npm run pr -- <name>`.",
-  ],
 ];
+
+// A human opens PRs (docs/PROCESS.md). Matched in commandText where a command starts, after
+// optional `VAR=x` or `env`, so a grep pattern or commit message that only mentions it runs.
+const OPENS_PR = new RegExp(
+  String.raw`(?:^|[;&|({` +
+    "`" +
+    String.raw`]\s*|\n\s*)(?:\w+=\S*\s+)*(?:env\s+(?:\w+=\S*\s+)*)?` +
+    String.raw`(?:npm(?:\.cmd)?(?:\s+-\S+)*\s+(?:run|run-script)(?:\s+-\S+)*\s+pr(?![\w:.-])` +
+    String.raw`|node(?:\.exe)?(?:\s+-\S+)*\s+\S*open-pr\.mjs` +
+    String.raw`|(?:[^\s/\\;&|]*[/\\])*gh(?:\.exe)?(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+pr\s+(?:create|new)\b)`,
+  "i",
+);
+
+/**
+ * What the shell will run: heredoc bodies dropped, and quoted strings that hold whitespace
+ * (commit messages, grep patterns) emptied. A quoted path to gh is kept as `gh`, and `|;&`
+ * inside other quotes (`'s|a|b|'`) no longer split commands.
+ */
+export function commandText(command) {
+  const kept = [];
+  let terminator = null;
+  for (const line of command.split("\n")) {
+    if (terminator !== null) {
+      if (line.trim() === terminator) terminator = null;
+      continue;
+    }
+    kept.push(line);
+    terminator = /<<-?\s*(["']?)([\w-]+)\1/.exec(line)?.[2] ?? null;
+  }
+  return kept.join("\n").replace(/"[^"]*"|'[^']*'/g, (quoted) => {
+    const inner = quoted.slice(1, -1);
+    if (/(?:^|[/\\])gh(?:\.exe)?$/i.test(inner)) return "gh";
+    return /\s/.test(inner) ? '""' : quoted.replace(/[|;&]/g, "_");
+  });
+}
 
 const SUPPRESSION =
   /#\s*noqa|type:\s*ignore|pyright:\s*ignore|eslint-disable|@ts-(?:ignore|expect-error|nocheck)|pragma:\s*allowlist/;
@@ -47,13 +76,34 @@ const SHELL_WRITE =
 const CHECK_CONFIG = /\b(?:pyproject\.toml|package\.json|vite\.config\.ts)\b/;
 
 // docs/CODING_GUIDELINES.md rule 6: source, tests and docs are edited with Edit or Write, which
-// the content checks below can see (sso-registration retro).
-const IN_PLACE_EDIT =
-  /\bsed\s+-i|\bperl\s+-\w*i|\btee\b|\bwrite_text\b|\bopen\([^)]*["'][wa+]|\bwriteFileSync\b|\b(?:Set|Add)-Content\b|\bOut-File\b/;
-const SOURCE_PATH =
-  /(?<![\w.-])(?:backend|frontend|e2e|scripts|docs)[/\\]|(?<![\w.-])(?:README|AGENTS|CLAUDE)\.md\b/;
-const REDIRECT_TO_SOURCE =
-  /(?<![\d&])>>?\s*["']?(?:\.[/\\])?(?:(?:backend|frontend|e2e|scripts|docs)[/\\]|(?:README|AGENTS|CLAUDE)\.md\b)/;
+// the content checks below can see (sso-registration retro). Each rule looks at what a write
+// targets, so reading, searching and test runs that only name those paths stay silent. A `cd`
+// into a folder first, or a path held in a variable, still gets through: it's a seatbelt.
+const SOURCE = String.raw`(?<![\w.-])(?:(?:backend|frontend|e2e|scripts|docs)[/\\]|(?:README|AGENTS|CLAUDE)\.md\b)`;
+const TARGET = String.raw`["']?[^\s"'|;&<>]*?${SOURCE}`;
+const SOURCE_PATH = new RegExp(SOURCE);
+const SHELL_EDITS = [
+  new RegExp(String.raw`\bsed\b(?=[^|;&\n]*\s(?:-[A-Za-z]*i|--in-place)\b)[^|;&\n]*${SOURCE}`),
+  new RegExp(String.raw`\bperl\b(?=[^|;&\n]*\s-[A-Za-z]*i)[^|;&\n]*${SOURCE}`),
+  new RegExp(String.raw`\btee\b(?:\s+-\S+)*\s+${TARGET}`),
+  new RegExp(String.raw`(?<![=\-<])[12&]?>>?\s*${TARGET}`),
+  new RegExp(
+    String.raw`(?:^|[;|&{(]\s*|\n\s*)(?:Set-Content|Add-Content|Out-File)\b[^|;&\n]*${SOURCE}`,
+    "i",
+  ),
+];
+// Script writes count only when an interpreter runs (or the tool is PowerShell), so a grep
+// for `write_text` doesn't ask. Their paths may sit in a heredoc body, so the raw command is read.
+const SCRIPT_WRITE =
+  /\bwrite_(?:text|bytes)\b|\bopen\([^)]*["'][wax]\+?["']|\b(?:writeFile|writeFileSync|appendFile|appendFileSync)\b|\bWriteAll(?:Text|Bytes|Lines)\b/;
+const INTERPRETER = /(?:^|[\s;&|(])(?:python3?|py|node|deno|pwsh|powershell)(?:\.exe)?(?=\s|$)/m;
+
+function editsSourceInShell(toolName, command) {
+  const text = commandText(command);
+  if (SHELL_EDITS.some((pattern) => pattern.test(text))) return true;
+  const interpreter = toolName === "PowerShell" || INTERPRETER.test(text);
+  return interpreter && SCRIPT_WRITE.test(command) && SOURCE_PATH.test(command);
+}
 
 function relative(filePath, projectDir) {
   return path.relative(projectDir, path.resolve(projectDir, filePath)).split(path.sep).join("/");
@@ -72,6 +122,12 @@ export function evaluate({ tool_name: toolName, tool_input: input = {} }, projec
     for (const [pattern, reason] of SHELL_RULES) {
       if (pattern.test(command)) return { decision: "deny", reason };
     }
+    if (OPENS_PR.test(commandText(command))) {
+      return {
+        decision: "deny",
+        reason: "Agents never open PRs. Give the human `npm run pr -- <name>`.",
+      };
+    }
     if (PROTECTED_IN_SHELL.test(command)) {
       return { decision: "ask", reason: "Shell write to harness files needs human approval." };
     }
@@ -82,10 +138,7 @@ export function evaluate({ tool_name: toolName, tool_input: input = {} }, projec
           "Shell writes skip the guard's content checks. Use Edit or Write for check config and suppressions, or ask.",
       };
     }
-    if (
-      (IN_PLACE_EDIT.test(command) && SOURCE_PATH.test(command)) ||
-      REDIRECT_TO_SOURCE.test(command)
-    ) {
+    if (editsSourceInShell(toolName, command)) {
       return {
         decision: "ask",
         reason:

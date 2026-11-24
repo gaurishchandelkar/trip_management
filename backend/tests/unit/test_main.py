@@ -36,9 +36,8 @@ def test_database_path_comes_from_trip_db_path(
     assert store.path == tmp_path / "configured.db"
 
 
-def test_database_path_defaults_to_the_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TRIP_DB_PATH", raising=False)
-
+def test_database_path_defaults_to_the_repo_root() -> None:
+    # TRIP_DB_PATH is unset here: backend/tests/conftest.py clears every TRIP_* variable.
     store: Store = create_app().state.store
 
     assert store.path.resolve() == ROOT / "trip.db"
