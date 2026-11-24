@@ -3,7 +3,7 @@
 ## Current state
 
 - **Product:** Trip Management members and groups (`docs/specs/members-and-groups.md`): create groups, browse and search, ask to join from the list or by name, and owner approve or reject. SQLite storage through SQLAlchemy 2.x. The Hello World greeting is retired.
-- **Sign-in** (`docs/specs/sso-registration.md`): Google only, through OpenID Connect with PKCE (`backend/identity/`, joserfc + httpx2), then a hashed session cookie. New people finish registering with a user ID, display name and mobile number; members edit their display name and mobile on Profile. Display names show with `@user-id` beside them, and only a group's owner sees mobile numbers. The user-ID and unchecked-password forms are retired.
+- **Sign-in** (`docs/specs/sso-registration.md`): Google only, through OpenID Connect with PKCE (`backend/identity/`, joserfc + httpx2), then a hashed session cookie. New people finish registering with a user ID, display name and mobile number; members edit their display name and mobile on Profile. Display names show with `@user-id` beside them, and only a group's owner sees mobile numbers. The user-ID and unchecked-password forms are retired. The callback's `code` and `state` are kept out of every log, a full table of open sign-ins drops the oldest, and cookies are `Secure` when `TRIP_PUBLIC_URL` is `https`. `npm run dev` loads the git-ignored `.env` when it exists (`scripts/dev-backend.mjs`). Merged in PR #18.
 - **Frontend:** branded **Caravan** (`docs/specs/app-shell-and-design-system.md`): an app shell with skip link and per-screen titles, `react-router` addresses (`/`, `/groups/{id}`, `/profile`, `/register/complete`, not found), modal dialogs for creating and joining groups, and a plain-CSS design system (`frontend/src/theme/`, `frontend/src/ui/`) with light and dark themes, a self-hosted Inter font, reduced-motion support and phone layouts down to 360 px.
 - **Rules:** `AGENTS.md`, `CLAUDE.md`, and the `docs/` rules and templates are in place.
 - **Safeguards:**
@@ -11,6 +11,7 @@
   - import-linter layer contracts (`api → services → storage | identity → domain`, SQLAlchemy only in `backend/storage`, and httpx2 and joserfc only in `backend/identity`)
   - pip-audit, npm audit and detect-secrets
   - a scan for invisible Unicode format characters in tracked source (`scripts/harness-config.test.mjs`)
+  - an autouse fixture that hides the developer's `TRIP_*` settings from every backend test (`backend/tests/conftest.py`)
   - a design-token contrast test (WCAG AA, both themes) and a scan that keeps raw colours out of every stylesheet but `tokens.css` (`frontend/src/theme/tokens.test.ts`)
   - a scan that fails on any third-party URL in the frontend's sources (`frontend/src/origins.test.ts`)
   - a check that every plan's "Spec coverage" table names real tests as `path::test name` (`scripts/harness-config.test.mjs`)
@@ -30,13 +31,7 @@
 
 ## In progress
 
-- **Registration and sign-in with Google** (`docs/specs/sso-registration.md`, `docs/plans/PLAN_sso-registration.md`), on `feat/sso-registration`.
-  - Phase 1 done: the OpenID Connect adapter (`backend/identity/`, joserfc + httpx2), PKCE, and an import contract that keeps `httpx2` and `joserfc` inside `backend/identity`.
-  - Phase 2 done: the backend sign-in and registration API (`/api/auth/...`) and the `identities`, `sign_in_flows` and `pending_registrations` tables. Google is on when `TRIP_GOOGLE_CLIENT_ID` and `TRIP_GOOGLE_CLIENT_SECRET` are set.
-  - Phase 3 done: the app signs people in only with **Continue with Google**, and new people pick a user ID, display name and mobile number on **Finish registering** (`/register/complete`). `POST /api/members` and `POST /api/sign-in` are gone, and `members.mobile` is required. An old `trip.db` stops startup with a message to delete it. E2E signs in through a fake Google (`e2e/fake_google.py`, port 8102).
-  - Phase 4 done: every person shows their display name with `@user-id` beside it (banner, cards, members, requests, Approve/Reject labels). Group detail carries `user_id`, groups carry `owner_user_id`, and only a group's owner gets mobile numbers, shown as `tel:` links.
-  - Phase 5 done: **Profile** (`/profile`, `POST /api/me/profile`) edits the display name and mobile; the screenshot set is 24 images; docs updated. Left for `/handover`: `code-reviewer` and `security-reviewer`. A real Google sign-in on `localhost` was confirmed by the repo owner on 2026-11-24.
-  - Follow-up: `npm run dev` loads the git-ignored `.env` when it exists (`scripts/dev-backend.mjs`), so the Google credentials can live there. `.env.example` lists the names.
+- Nothing. Registration and sign-in with Google merged in PR #18 on 2026-11-24; its retro is in `docs/HARNESS_LOG.md`.
 
 ## Known gaps
 
