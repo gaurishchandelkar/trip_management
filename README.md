@@ -44,7 +44,7 @@ Without it, the app starts but the sign-in screen says "Sign-in isn't set up yet
 | Variable | Value |
 |---|---|
 | `TRIP_GOOGLE_CLIENT_ID` | The client ID from step 1 |
-| `TRIP_GOOGLE_CLIENT_SECRET` | The client secret from step 1. Never commit it |
+| `TRIP_GOOGLE_CLIENT_SECRET` | The client secret from step 1. Never commit it, and never paste it into a chat with an agent or a `!` command there: the transcript keeps it. Type it into `.env` yourself |
 | `TRIP_PUBLIC_URL` | Optional. The app's address, if not `http://localhost:5173`. The redirect URI is this plus `/api/auth/google/callback`. It must be `https`, or `http` on `localhost` or `127.0.0.1`, or the backend won't start. With `https`, every cookie is `Secure` |
 
 Then open http://localhost:5173, choose **Continue with Google**, finish registering, and start a group. To try joining and approving, sign in with a second Google account in a private window.

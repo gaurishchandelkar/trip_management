@@ -1,4 +1,3 @@
-import os
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -41,16 +40,8 @@ def provider() -> FakeIdentityProvider:
 
 
 @pytest.fixture
-def app(
-    db_path: Path,
-    clock: FakeClock,
-    provider: FakeIdentityProvider,
-    monkeypatch: pytest.MonkeyPatch,
-) -> FastAPI:
-    # create_app reads TRIP_* settings (Secure cookies, Google), so a developer's shell can't
-    # change the results.
-    for name in [name for name in os.environ if name.startswith("TRIP_")]:
-        monkeypatch.delenv(name)
+def app(db_path: Path, clock: FakeClock, provider: FakeIdentityProvider) -> FastAPI:
+    # TRIP_* settings are cleared for every backend test (backend/tests/conftest.py).
     app = create_app(db_path)
     app.dependency_overrides[get_clock] = lambda: clock
     app.state.identity_provider = provider

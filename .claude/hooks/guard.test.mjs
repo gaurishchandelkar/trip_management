@@ -36,6 +36,79 @@ const cases = [
   ["Bash", { command: "sed -i 's/fail_under = 80/fail_under = 0/' pyproject.toml" }, "ask"],
   ["Bash", { command: "echo 'x = 1  # noqa' >> backend/x.py" }, "ask"],
   ["PowerShell", { command: "Set-Content package.json -Value $json" }, "ask"],
+  // Shell edits of source, tests and docs ask: rule 6 (sso-registration retro)
+  ["Bash", { command: "sed -i 's/a/b/' backend/services/auth.py" }, "ask"],
+  ["Bash", { command: "python - <<'EOF'\nPath(\"docs/SPEC.md\").write_text(t)\nEOF" }, "ask"],
+  ["Bash", { command: "cat > docs/notes.md <<'EOF'\nx\nEOF" }, "ask"],
+  ["Bash", { command: "perl -pi -e 's/a/b/' frontend/src/App.tsx" }, "ask"],
+  ["Bash", { command: "echo x | tee e2e/x.py" }, "ask"],
+  ["Bash", { command: `node -e "fs.writeFileSync('scripts/x.mjs', s)"` }, "ask"],
+  ["Bash", { command: "echo x >> README.md" }, "ask"],
+  ["PowerShell", { command: "Set-Content CLAUDE.md 'x'" }, "ask"],
+  ["Bash", { command: "cat > /c/Data/x/trip_management/docs/notes.md <<'EOF'\nx\nEOF" }, "ask"],
+  ["Bash", { command: 'echo x > "$PWD/docs/x.md"' }, "ask"],
+  ["Bash", { command: "echo x 2>docs/x.md" }, "ask"],
+  ["Bash", { command: "echo '# noqa' 1> backend/x.py" }, "ask"],
+  ["Bash", { command: "sed -Ei 's/a/b/' backend/x.py" }, "ask"],
+  ["Bash", { command: "sed --in-place 's/a/b/' backend/x.py" }, "ask"],
+  ["Bash", { command: "sed -e 's|a|b|' -i backend/x.py" }, "ask"],
+  ["Bash", { command: "perl -p -i -e 's/a/b/' backend/x.py" }, "ask"],
+  ["Bash", { command: `python -c "Path('docs/x.md').write_bytes(b)"` }, "ask"],
+  ["Bash", { command: `node -e "fs.appendFileSync('scripts/x.mjs', s)"` }, "ask"],
+  ["PowerShell", { command: "[IO.File]::WriteAllText('docs/x.md', $s)" }, "ask"],
+  ["PowerShell", { command: "Get-Content a.txt | Out-File docs/x.md" }, "ask"],
+  // ...while reading, searching, test runs and other paths stay silent
+  ["Bash", { command: "sed -n '1,5p' backend/main.py" }, null],
+  ["Bash", { command: "uv run pytest backend/tests > test-output.txt" }, null],
+  ["Bash", { command: "uv run pytest backend/tests 2>&1 | tee test-output.txt" }, null],
+  ["Bash", { command: "git diff origin/main...HEAD -- docs/ | tee $TEMP/d.txt" }, null],
+  ["Bash", { command: "uv run ruff format backend" }, null],
+  ["Bash", { command: "sed -i 's/a/b/' /c/Users/me/scratchpad/notes.txt" }, null],
+  ["Bash", { command: "sed -i 's/a/b/' /tmp/x.txt && uv run pytest backend/tests" }, null],
+  ["Bash", { command: 'grep -rn "write_text" backend/' }, null],
+  ["Bash", { command: 'grep -rn "sed -i" docs/' }, null],
+  ["Bash", { command: "rg -n writeFileSync scripts/" }, null],
+  ["Bash", { command: `grep -rn "open(" backend/ | grep "'w'"` }, null],
+  ["Bash", { command: 'git commit -m "Guard sed -i and tee edits of docs/ and backend/"' }, null],
+  ["Bash", { command: `node -e "console.log(['a'].map(f=>'docs/'+f))"` }, null],
+  // Agents never open PRs (sso-registration retro), however the command is spelled...
+  ["Bash", { command: "npm run pr -- sso-registration" }, "deny"],
+  ["Bash", { command: "git status && npm run pr" }, "deny"],
+  ["Bash", { command: "npm run -s pr -- sso" }, "deny"],
+  ["Bash", { command: "npm run --silent pr" }, "deny"],
+  ["Bash", { command: "npm run-script pr" }, "deny"],
+  ["Bash", { command: "npm run pr&& echo ok" }, "deny"],
+  ["Bash", { command: "npm run pr|cat" }, "deny"],
+  ["Bash", { command: "echo $(npm run pr)" }, "deny"],
+  ["Bash", { command: "node scripts/open-pr.mjs x" }, "deny"],
+  ["Bash", { command: "node --no-warnings scripts/open-pr.mjs x" }, "deny"],
+  ["Bash", { command: 'gh pr create --title "x" --body y' }, "deny"],
+  ["Bash", { command: "gh pr new" }, "deny"],
+  ["Bash", { command: "gh -R o/r pr create" }, "deny"],
+  ["Bash", { command: "GH_REPO=o/r gh pr create" }, "deny"],
+  ["Bash", { command: "env GH_TOKEN=x gh pr create" }, "deny"],
+  ["Bash", { command: "GH.EXE pr create" }, "deny"],
+  ["PowerShell", { command: '& "C:\\Program Files\\GitHub CLI\\gh.exe" pr create -t x' }, "deny"],
+  ["PowerShell", { command: "npm run pr;" }, "deny"],
+  // ...while text that only mentions it runs
+  ["Bash", { command: 'grep -rn "npm run pr" docs' }, null],
+  ["Bash", { command: 'rg "npm run pr|gh pr create" docs' }, null],
+  ["Bash", { command: 'grep -rn "npm run pr\\|gh pr create" docs' }, null],
+  ["Bash", { command: 'grep -E "(gh pr create)" docs/PROCESS.md' }, null],
+  ["Bash", { command: "echo 'see (gh pr create)'" }, null],
+  ["Bash", { command: 'git commit -m "Tell the human to run npm run pr"' }, null],
+  [
+    "Bash",
+    { command: 'git commit -m "retro: x\n\ngh pr create and npm run pr are denied."' },
+    null,
+  ],
+  [
+    "Bash",
+    { command: "git commit -F - <<'EOF'\nretro: x\n\nnpm run pr is for humans.\nEOF" },
+    null,
+  ],
+  ["Bash", { command: "npm run pretty" }, null],
+  ["Bash", { command: "gh pr view 18" }, null],
   // Reading, searching and dependency commands stay silent
   ["Bash", { command: 'grep -rn "type: ignore" backend' }, null],
   ["Bash", { command: "grep -n noqa backend/x.py 2>/dev/null" }, null],
@@ -88,6 +161,17 @@ for (const [toolName, toolInput, expected] of cases) {
   });
 }
 
+// A regex that backtracks badly would stall every tool call (sso-registration retro review).
+test("the guard decides a 50,000-character command quickly", () => {
+  for (const filler of [";/", "a/", " -x y", "'a b' "]) {
+    const command = `gh ${filler.repeat(Math.ceil(50_000 / filler.length))}`;
+    const started = performance.now();
+    evaluate({ tool_name: "Bash", tool_input: { command } }, P);
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 250, `${JSON.stringify(filler)} took ${Math.round(elapsed)} ms`);
+  }
+});
+
 // The guard only sees tools the hook matcher routes to it. A shell tool missing there bypasses every rule.
 test("settings route every shell tool through the guard and deny push for each", () => {
   const settings = JSON.parse(readFileSync(".claude/settings.json", "utf8"));
@@ -97,5 +181,9 @@ test("settings route every shell tool through the guard and deny push for each",
   for (const tool of SHELL_TOOLS) {
     assert.ok(guarded.includes(tool), `${tool} is not routed through the guard`);
     assert.ok(settings.permissions.deny.includes(`${tool}(git push *)`), `${tool} can push`);
+    const prRules = ["npm run pr", "npm run pr *", "gh pr create", "gh pr create *"];
+    for (const rule of [...prRules, "gh pr new", "gh pr new *"]) {
+      assert.ok(settings.permissions.deny.includes(`${tool}(${rule})`), `${tool} can open a PR`);
+    }
   }
 });

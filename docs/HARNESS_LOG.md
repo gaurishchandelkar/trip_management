@@ -13,6 +13,59 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-11-24: The sign-in callback's one-time code reached uvicorn's access log
+- Signal: security issue
+- What happened: The spec kept the callback's `code` and `state` out of the app's own logs, and the sign-in service logged only the provider, outcome and user ID. But uvicorn's access log writes every request line, query string included, so the real backend log held the code from a real Google sign-in. Both reviewers found it at `/handover` (blocking), not `/implement`: no test read the server's log, only the app's `caplog`.
+- Improvement: test. A `uvicorn.access` filter (`backend/api/access_log.py`) strips the query from `/api/auth/` paths, with unit tests. An inside E2E test signs up and then reads the real backend's log file, failing if the code or state appears in it (`e2e/test_network_contract.py`). Proof: with the filter removed, that E2E test found the code. Merged in PR #18.
+- Enforced: yes (unit and functional stages)
+
+## 2026-11-24: Tests read the developer's TRIP_* settings
+- Signal: repeated review feedback
+- What happened: At `/handover`, `code-reviewer` found that `create_app` read `TRIP_PUBLIC_URL` from the shell to decide whether cookies are `Secure`, and the integration fixture didn't pin it. With an https value set, every session cookie became `Secure`, the `http://testserver` client dropped it, and tests failed with 401 and no hint why. The same leak had already been patched once for `TRIP_DB_PATH` in `backend/tests/unit/test_main.py`, one variable at a time.
+- Improvement: test. An autouse fixture in `backend/tests/conftest.py` clears every `TRIP_*` variable for every backend test, and `backend/tests/unit/test_test_isolation.py` asserts none reaches a test. That test sets `TRIP_PUBLIC_URL` itself in a module-scoped fixture, which runs before the autouse one, so it fails without the fixture even in CI's clean environment (the first version only failed when a developer's shell had a `TRIP_*` variable, which the retro's code review caught). `docs/CODING_GUIDELINES.md` (Tests) says to set one with `monkeypatch.setenv` when a test needs it. Proof: with the fixture moved away, the isolation test fails in a clean shell, and with an https `TRIP_PUBLIC_URL` in the shell the `test_profile.py` tests that sign in fail too; with it, they pass.
+- Enforced: yes (unit stage)
+
+## 2026-11-24: The plan drifted from the code after follow-up commits
+- Signal: repeated review feedback
+- What happened: After the security follow-ups, `code-reviewer` found the plan still said "Cookies without `Secure`: unchanged" and recorded test counts from three commits earlier. This is the same kind of drift as the earlier coverage-row findings: the plan is ticked once and later commits don't revisit it.
+- Improvement: skill, approved by the human. `/handover` step 3 now says: if commits landed after `/implement`, re-read the plan's design decisions, human-attention items and Final verification line against `git diff` of those commits, update what the code no longer matches, test counts included, and mark superseded decisions as superseded.
+- Enforced: documented only (whether prose still matches the code needs judgment; the coverage-table check already covers test names)
+
+## 2026-11-24: Source and docs were edited by shell scripts
+- Signal: harness defect
+- What happened: Through this feature the agent edited tracked files with `sed -i` and Python `write_text` heredocs, against `docs/CODING_GUIDELINES.md` rule 6, including docs and backend code in the review fixes. Nothing broke, but those edits skipped the guard's content checks. Run against the commands used, the guard asked for the ones touching `.claude/` but returned nothing for `sed -i` on `backend/services/auth.py` or `write_text` on `docs/SPEC.md`: it asks only when a shell write names check config or contains a suppression.
+- Improvement: safeguard, approved by the human. `guard.mjs` asks when a shell command writes into `backend/`, `frontend/`, `e2e/`, `scripts/`, `docs/`, `README.md`, `AGENTS.md` or `CLAUDE.md`, matched on the write's target:
+  - `sed -i`/`-Ei`/`--in-place`, `perl -i`, `tee`, and `>`, `1>`, `2>` or `&>` redirects, including by absolute path;
+  - PowerShell's `Set-Content`, `Add-Content` and `Out-File` where a command starts;
+  - script writes (`write_text`, `write_bytes`, `open(..., "w")`, `writeFile(Sync)`, `appendFile(Sync)`, `WriteAllText`) when an interpreter runs, reading the heredoc body for the path.
+
+  Grep and rg searches, `sed -n`, test runs piped into `tee`, formatters, commit messages and writes elsewhere stay silent, because the rules read `commandText`: heredoc bodies dropped, and quoted strings with spaces emptied. The first version matched words anywhere in the command, so the retro's code review found it asking for greps and `pytest | tee` and missing absolute paths; the rewrite has a case for each. A `cd` into a folder first, or a path in a variable, still gets through. Proof: against the first version, 41 of the cases in `.claude/hooks/guard.test.mjs` fail; against the original guard, the 8 first "ask" cases fail. All pass now, and a test keeps a 50,000-character command under 250 ms.
+- Enforced: yes (unit stage, `node --test` on `.claude/hooks/*.test.mjs`); like every guard rule, it matches command text, so it's a seatbelt
+
+## 2026-11-24: A Google client secret was pasted into the session
+- Signal: security issue
+- What happened: Following hand-written setup steps, the human ran `setx TRIP_GOOGLE_CLIENT_SECRET "..."` as a `!` command, which put the secret in the session transcript; the agent advised rotating it. `setx` also didn't reach the already-running VS Code, so the backend said "Sign-in isn't set up" until the variables moved to `.env`.
+- Improvement: guideline. The README's setup now says to type the secret into `.env` yourself, never into a chat or a `!` command. The safeguard it relies on shipped in PR #18: `npm run dev` loads the git-ignored `.env` when it exists (`scripts/dev-backend.mjs`, tested by `scripts/dev-backend.test.mjs`, including that `.env` is git-ignored). Hooks can't see `!` commands, so the pasting itself can't be blocked.
+- Enforced: yes for loading `.env` (unit stage); documented only for not pasting secrets
+
+## 2026-11-24: Agents may run npm run pr
+- Signal: security issue
+- What happened: `security-reviewer` noted that the allow rule `Bash(npm run *)` in `.claude/settings.json` covers `npm run pr`, which runs `gh pr create`. Once the human pushes a branch, an agent could open its PR unasked, though `docs/PROCESS.md` says a human opens PRs.
+- Improvement: safeguard, approved by the human. `.claude/settings.json` denies `npm run pr`, `gh pr create` and `gh pr new` (with and without arguments) for both shell tools, and the settings test checks each. Those rules miss `npm run -s pr`, which still matches the `npm run *` allow rule, so the guard also denies opening a PR where a command starts in `commandText`:
+  - `npm` with flags, `run` or `run-script`, and `pr` followed by anything but a name character;
+  - `node scripts/open-pr.mjs`;
+  - `gh` or `gh.exe`, by any path or case, with global flags, then `pr create` or `pr new`;
+  - after `VAR=x`, `env`, `;`, `&&`, `|`, `(`, `$(` or a backtick.
+
+  A grep pattern, a commit message or a heredoc body that only mentions them still runs. The first version also hard-denied such greps and commit messages, and missed `npm run -s pr`; both reviewers caught it. Wrappers such as `bash -c` or `npx` aren't matched, but they aren't on the allow list, so they prompt. The human's own `!` commands aren't affected. Proof: against the original guard and settings, the deny cases and the settings test fail; all pass now.
+- Enforced: yes (unit stage)
+
+## 2026-11-24: A dependency was tried under strict typing before the plan named it
+- Signal: successful pattern
+- What happened: The spec approved Authlib. While planning, a quick try of its OAuth client in pyright's strict mode gave 4 errors that only suppressions would silence, so the plan proposed joserfc (Authlib's typed JOSE library) plus httpx2 instead, and the human approved it at plan approval. Implementation then had no typing surprises. The in-process fake provider for integration tests and the real-token fake server for E2E also worked well: CI never needs Google.
+- Improvement: skill, approved by the human. `/plan` step 6 now says to try a new dependency's calls under strict typing before naming it, once the human agrees to the try-out. The try-out uses a throwaway venv or npm prefix in the scratchpad, so no lockfile changes. Python files start with `# pyright: strict`, because pyright has no `--strict` flag, and TypeScript uses `tsc --strict --noEmit`. When a library only passes with suppressions, the plan proposes a typed alternative.
+- Enforced: documented only (a try-out is a judgment step)
+
 ## 2026-11-24: The project's /ship was hidden by Claude Code's own
 - Signal: harness defect
 - What happened: Claude Code added a built-in `/ship` skill that commits, pushes and opens a PR. It took the name, so typing `/ship sso-registration` ran the built-in one, which only printed its usage or refused to start. It never reached this repo's stage-5 skill. Had it run, it would have pushed, which the hard lines forbid agents to do.
