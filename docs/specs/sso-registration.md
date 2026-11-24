@@ -144,7 +144,7 @@ The Name is what people read; `@user-id` sits beside it, smaller, so two people 
 - [ ] `uv.lock` is updated and pip-audit is clean
 - [ ] `.env.example` lists the new variable names (added by the human)
 - [ ] `README.md` explains how to register a Google OAuth client for local development and to delete the old `trip.db`
-- [ ] The human has signed in with a real Google account once on `localhost` and confirmed it works (manual check, not in CI)
+- [x] The human has signed in with a real Google account once on `localhost` and confirmed it works (manual check, not in CI) *Confirmed on 2026-11-24.*
 - [ ] `code-reviewer` and `security-reviewer` have run with no unresolved findings
 
 ## Out of scope

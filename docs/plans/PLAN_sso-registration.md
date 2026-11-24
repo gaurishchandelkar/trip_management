@@ -313,14 +313,14 @@ Approved by the repo owner in conversation on 2026-11-24 (option 2), after they 
 
 - [x] `scripts/dev-backend.test.mjs::loads the env file when there is one`, `scripts/dev-backend.test.mjs::passes no env file when there isn't one`, `scripts/dev-backend.test.mjs::npm run dev starts the backend through this script`, `scripts/dev-backend.test.mjs::the env file is git-ignored`
 - [x] Negative proof: always passing `--env-file` fails only `passes no env file when there isn't one`; reverted.
-- [ ] The human runs `npm run dev` with their `.env` and sees **Continue with Google** (agents never open `.env`).
+- [x] The human runs `npm run dev` with their `.env` and sees **Continue with Google** (agents never open `.env`). *Confirmed by the repo owner on 2026-11-24.*
 
 ## Final verification
 
 - [x] `npm run check` passes *All 7 stages, with this plan at Done: 157 backend unit (90% coverage), 263 vitest, 173 integration, 73 E2E, 24 screenshots.*
 - [x] Every acceptance criterion in the spec is covered by a test (table below)
 - [ ] `code-reviewer` and `security-reviewer` run before `/ship` (left for `/ship`)
-- [ ] The human signs in once with a real Google account on `localhost` (manual, spec Definition of Done)
+- [x] The human signs in once with a real Google account on `localhost` (manual, spec Definition of Done) *Confirmed by the repo owner on 2026-11-24, with the credentials loaded from `.env`.*
 
 ### Spec coverage
 
