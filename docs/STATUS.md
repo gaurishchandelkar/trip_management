@@ -35,7 +35,8 @@
   - Phase 2 done: the backend sign-in and registration API (`/api/auth/...`) and the `identities`, `sign_in_flows` and `pending_registrations` tables. Google is on when `TRIP_GOOGLE_CLIENT_ID` and `TRIP_GOOGLE_CLIENT_SECRET` are set.
   - Phase 3 done: the app signs people in only with **Continue with Google**, and new people pick a user ID, display name and mobile number on **Finish registering** (`/register/complete`). `POST /api/members` and `POST /api/sign-in` are gone, and `members.mobile` is required. An old `trip.db` stops startup with a message to delete it. E2E signs in through a fake Google (`e2e/fake_google.py`, port 8102).
   - Phase 4 done: every person shows their display name with `@user-id` beside it (banner, cards, members, requests, Approve/Reject labels). Group detail carries `user_id`, groups carry `owner_user_id`, and only a group's owner gets mobile numbers, shown as `tel:` links.
-  - Phase 5 done: **Profile** (`/profile`, `POST /api/me/profile`) edits the display name and mobile; the screenshot set is 24 images; docs updated. Left for `/ship`: `code-reviewer` and `security-reviewer`. Left for the human: a real Google sign-in on `localhost`, and adding the variable names to `.env.example`.
+  - Phase 5 done: **Profile** (`/profile`, `POST /api/me/profile`) edits the display name and mobile; the screenshot set is 24 images; docs updated. Left for `/ship`: `code-reviewer` and `security-reviewer`. Left for the human: a real Google sign-in on `localhost`.
+  - Follow-up: `npm run dev` loads the git-ignored `.env` when it exists (`scripts/dev-backend.mjs`), so the Google credentials can live there. `.env.example` lists the names.
 
 ## Known gaps
 

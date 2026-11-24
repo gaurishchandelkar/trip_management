@@ -39,7 +39,7 @@ Without it, the app starts but the sign-in screen says "Sign-in isn't set up yet
 
 1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application**.
 2. Add `http://localhost:5173/api/auth/google/callback` as an **Authorized redirect URI**.
-3. Set these environment variables for `npm run dev` (for example in your shell profile; `.env.example` lists the names):
+3. Put these in a `.env` file in the repo root, one `NAME=value` per line (`.env.example` lists the names). The file is git-ignored, and `npm run dev` loads it when it exists. Variables already set in your shell win over the file:
 
 | Variable | Value |
 |---|---|
@@ -49,7 +49,7 @@ Without it, the app starts but the sign-in screen says "Sign-in isn't set up yet
 
 Then open http://localhost:5173, choose **Continue with Google**, finish registering, and start a group. To try joining and approving, sign in with a second Google account in a private window.
 
-The tests never contact Google: they use a fake provider (`e2e/fake_google.py`), so `npm run check` needs none of these variables.
+Restart `npm run dev` after changing the file. The tests never contact Google: they use a fake provider (`e2e/fake_google.py`), so `npm run check` needs none of these variables and doesn't read `.env`.
 
 ### Data
 

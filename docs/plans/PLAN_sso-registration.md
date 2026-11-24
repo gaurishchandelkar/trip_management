@@ -303,6 +303,18 @@ Success criteria:
 - [x] Docs updated, and `rg -n "\b20\b (screenshots|captures)" docs/PROCESS.md docs/STATUS.md README.md .claude scripts` finds nothing. *Also `.github/PULL_REQUEST_TEMPLATE.md` ("lists all 24"), which the Human-attention list missed. `docs/plans/PLAN_ci-screenshot-artifacts.md` (Done) names the renamed summary test.*
 - [x] `npm run check` passes.
 
+## Follow-up: `npm run dev` loads `.env`
+
+Approved by the repo owner in conversation on 2026-11-24 (option 2), after they put the Google credentials in `.env`. Until then the backend read only real environment variables, so values in `.env` never reached it.
+
+- `scripts/dev-backend.mjs` starts the dev backend with `uv run --env-file .env ...` when the file exists, and without the flag when it doesn't: uv exits with "No environment file found" for a missing file, which would stop a fresh clone. Variables already set in the shell win over the file (checked with scratch files, not `.env`).
+- `package.json`: `dev:backend` runs the script. The tests and CI start the backend their own way, so they never load `.env`.
+- `README.md` documents `.env` as the place for the credentials.
+
+- [x] `scripts/dev-backend.test.mjs::loads the env file when there is one`, `scripts/dev-backend.test.mjs::passes no env file when there isn't one`, `scripts/dev-backend.test.mjs::npm run dev starts the backend through this script`, `scripts/dev-backend.test.mjs::the env file is git-ignored`
+- [x] Negative proof: always passing `--env-file` fails only `passes no env file when there isn't one`; reverted.
+- [ ] The human runs `npm run dev` with their `.env` and sees **Continue with Google** (agents never open `.env`).
+
 ## Final verification
 
 - [x] `npm run check` passes *All 7 stages, with this plan at Done: 157 backend unit (90% coverage), 263 vitest, 173 integration, 73 E2E, 24 screenshots.*
