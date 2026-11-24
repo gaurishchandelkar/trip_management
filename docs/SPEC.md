@@ -3,7 +3,7 @@
 Trip Management for friends. Members sign in with Google, and organise themselves into groups: anyone can create a group, and others join once the owner approves.
 (Specs: `docs/specs/members-and-groups.md`, `docs/specs/sso-registration.md`.)
 
-> **Local use for now.** Sign-in is through Google, but the app runs over plain HTTP with no deployment set up, and its cookies aren't `Secure`. Don't expose it beyond your own machine or network.
+> **Local use for now.** Sign-in is through Google, but the app runs over plain HTTP with no deployment set up. Its cookies become `Secure` only when `TRIP_PUBLIC_URL` is `https`. Don't expose it beyond your own machine or network.
 
 ## Members and sessions
 
@@ -12,8 +12,8 @@ Trip Management for friends. Members sign in with Google, and organise themselve
 - A **mobile number** is international: `+`, a country code that doesn't start with `0`, 8 to 15 digits in all. Spaces and hyphens are allowed when typing (at most 20 characters) and removed before storing. It isn't verified, and two members may share one.
 - User IDs are case-insensitive: they're stored and shown in lower case, so `ADA` and `ada` are the same member. The user ID never changes, and it's the only key used internally and in logs. The display name and mobile are stored in their own columns and only shown.
 - One Google account is one member, matched by Google's subject (`sub`) only, never by email. Only the provider name and subject are stored for the link: no email, Google name, picture or tokens.
-- A sign-in waiting for Google, and a registration waiting for its user ID, each last **10 minutes**, are single-use, and are capped at 1,000 open at once. One Google account keeps at most its 3 newest pending registrations, so a second tab still works but one account can't fill the table. The callback's `code` and `state` are kept out of every log, uvicorn's access log included.
-- A session is a random token in a `session` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/api`). Only its SHA-256 hash is stored. It lasts **7 days** from sign-in, and signing out ends it (but not the Google session).
+- A sign-in waiting for Google, and a registration waiting for its user ID, each last **10 minutes**, are single-use, and are capped at 1,000 open at once. When 1,000 sign-ins are open, the oldest is dropped to make room, so nobody can lock sign-in out by opening many; pending registrations past 1,000 are refused. One Google account keeps at most its 3 newest pending registrations, so a second tab still works but one account can't fill the table. The callback's `code` and `state` are kept out of every log, uvicorn's access log included.
+- A session is a random token in a `session` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/api`). Every cookie the app sets or clears is also `Secure` when `TRIP_PUBLIC_URL` starts with `https`. Only its SHA-256 hash is stored. It lasts **7 days** from sign-in, and signing out ends it (but not the Google session).
 - A member edits their **profile** (display name and mobile, saved together) at any time. Changes take effect at once.
 
 ## Groups and joining
@@ -34,7 +34,7 @@ Bodies are JSON and unknown fields are refused. Text fields refuse invisible for
 |---|---|---|
 | GET | `/api/health` | `200 {"status": "ok"}` |
 | GET | `/api/auth/providers` | `200 {"providers": ["google"]}`, or `[]` when Google isn't set up |
-| GET | `/api/auth/google/start?return_to=` | `302` to Google, with a flow cookie (`HttpOnly`, `SameSite=Lax`, `Path=/api/auth`, 10 minutes). `return_to` must be a path in the app, otherwise `/` |
+| GET | `/api/auth/google/start?return_to=` | `302` to Google, with a flow cookie (`HttpOnly`, `SameSite=Lax`, `Path=/api/auth`, 10 minutes, and `Secure` under https). `return_to` must be a path in the app, otherwise `/` |
 | GET | `/api/auth/google/callback?code=&state=` | `302` to `return_to` with the session cookie; to `/register/complete` with a pending-registration cookie (`Strict`, 10 minutes); or to `/?sign_in=failed` or `/?sign_in=cancelled` |
 | GET | `/api/auth/registration` | `200 {display_name, return_to}` for the pending registration |
 | POST | `/api/auth/registration` `{user_id, display_name, mobile}` | `201 {user_id, display_name, mobile}` and the session cookie |
@@ -52,7 +52,7 @@ Bodies are JSON and unknown fields are refused. Text fields refuse invisible for
 
 A `group` is `{group_id, name, description, owner_user_id, owner_display_name, member_count, my_status}`, where `my_status` is `owner`, `member`, `pending` or `none`. `members` items are `{user_id, display_name}` and `pending_requests` items are `{request_id, user_id, display_name}`; for the owner only, each also has `mobile`. For anyone else the `mobile` key is absent.
 
-The callback never answers with JSON: a missing, reused, expired or mismatched `state`, a missing flow cookie, a `code` or `state` over 512 characters, a token that fails a check, Google being down or slow (5 seconds), a full table, or a storage failure all redirect to `/?sign_in=failed`.
+The callback never answers with JSON: a missing, reused, expired or mismatched `state`, a missing flow cookie, a `code` or `state` over 512 characters, a token that fails a check, Google being down or slow (5 seconds), a full pending-registration table, or a storage failure all redirect to `/?sign_in=failed`.
 
 ### Errors
 

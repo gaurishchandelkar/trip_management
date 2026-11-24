@@ -42,7 +42,7 @@
 
 - `main` has no GitHub branch protection (private repo on a free plan). "Never commit straight to `main`" is enforced by a local pre-commit hook, so a merge or push made outside this clone isn't checked.
 - The guard asks before shell writes that name check config or contain suppressions, but it matches command text, so a write it doesn't recognise still gets through.
-- The app is for local use: it runs over plain HTTP, its cookies aren't `Secure`, and there's no deployment. Sign-in is only as strong as that.
+- The app is for local use: it runs over plain HTTP, and there's no deployment. Cookies are `Secure` only once `TRIP_PUBLIC_URL` is `https`. Sign-in is only as strong as that.
 - Real Google sign-in is checked by hand only. CI and `npm run check` sign in through the fake provider, which follows the protocol but isn't Google.
 - Mobile numbers aren't verified, and nothing stops a member from typing someone else's.
 - Browsing stops at 50 groups with no paging; members narrow the list with search.

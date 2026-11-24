@@ -2,12 +2,33 @@ import logging
 
 import pytest
 
-from backend.identity.config import InsecureIssuerError, google_provider, google_settings
+from backend.identity.config import (
+    InsecureIssuerError,
+    google_provider,
+    google_settings,
+    serves_https,
+)
 from backend.identity.oidc import GOOGLE_ISSUER, OidcProvider, OidcSettings
 
 ID = "client-id-value"
 CREDENTIAL = "client-credential-value"
 BOTH = {"TRIP_GOOGLE_CLIENT_ID": ID, "TRIP_GOOGLE_CLIENT_SECRET": CREDENTIAL}
+
+
+@pytest.mark.parametrize(
+    ("public_url", "https"),
+    [
+        (None, False),
+        ("http://localhost:5173", False),
+        ("https://trips.example.org", True),
+        ("HTTPS://trips.example.org/", True),
+        ("httpsx://trips.example.org", False),
+    ],
+)
+def test_serves_https_only_for_an_https_public_url(public_url: str | None, https: bool) -> None:
+    env = {} if public_url is None else {"TRIP_PUBLIC_URL": public_url}
+
+    assert serves_https(env) is https
 
 
 def test_no_variables_means_google_is_off() -> None:

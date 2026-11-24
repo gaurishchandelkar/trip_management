@@ -43,10 +43,19 @@ def google_settings(env: Mapping[str, str]) -> OidcSettings | None:
     local = parts.scheme == "http" and parts.hostname in LOCAL_HOSTS
     if parts.scheme != "https" and not local:
         raise InsecureIssuerError
-    public_url = (env.get(PUBLIC_URL_VAR) or DEFAULT_PUBLIC_URL).rstrip("/")
     return OidcSettings(
         issuer=issuer,
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=f"{public_url}{CALLBACK_PATH}",
+        redirect_uri=f"{public_url(env)}{CALLBACK_PATH}",
     )
+
+
+def public_url(env: Mapping[str, str]) -> str:
+    """Where people open the app, without a trailing slash."""
+    return (env.get(PUBLIC_URL_VAR) or DEFAULT_PUBLIC_URL).rstrip("/")
+
+
+def serves_https(env: Mapping[str, str]) -> bool:
+    """True when people open the app over https, so its cookies must be Secure."""
+    return urlsplit(public_url(env)).scheme == "https"

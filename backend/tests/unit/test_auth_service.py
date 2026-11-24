@@ -9,7 +9,6 @@ from backend.domain.errors import (
     AccountAlreadyLinkedError,
     DomainError,
     IdentityRejectedError,
-    LimitReachedError,
     ProviderUnavailableError,
     UnauthenticatedError,
     UserIdTakenError,
@@ -22,6 +21,7 @@ from backend.domain.models import (
     Member,
     PendingRegistration,
     SignInFlow,
+    hash_token,
 )
 from backend.services import auth, members
 from backend.services.auth import (
@@ -289,16 +289,26 @@ def test_missing_code_fails(store: Store, provider: FakeIdentityProvider, clock:
     )
 
 
-def test_start_refuses_past_the_cap(
-    store: Store, provider: FakeIdentityProvider, clock: Clock
+def test_a_full_table_drops_the_oldest_sign_in_to_make_room(
+    store: Store, provider: FakeIdentityProvider, clock: Clock, caplog: pytest.LogCaptureFixture
 ) -> None:
     with store.transaction() as tx:
-        for n in range(MAX_OPEN_SIGN_INS):
+        tx.add_sign_in_flow(
+            SignInFlow("oldest", "google", "s", "n", "v", "/", START + timedelta(minutes=1))
+        )
+        for n in range(MAX_OPEN_SIGN_INS - 1):
             later = START + timedelta(minutes=5)
             tx.add_sign_in_flow(SignInFlow(f"f{n}", "google", "s", "n", "v", "/", later))
 
-    with pytest.raises(LimitReachedError):
-        auth.start_sign_in(store, provider, None, clock)
+    with caplog.at_level(logging.WARNING, logger="backend.services.auth"):
+        started = auth.start_sign_in(store, provider, None, clock)
+
+    with store.transaction() as tx:
+        assert tx.count_sign_in_flows() == MAX_OPEN_SIGN_INS
+        assert tx.take_sign_in_flow("oldest") is None
+        assert tx.take_sign_in_flow("f0") is not None
+        assert tx.take_sign_in_flow(hash_token(started.flow_id)) is not None
+    assert "open sign-ins full, oldest dropped" in caplog.text
 
 
 def test_start_leaves_no_flow_when_the_provider_is_down(

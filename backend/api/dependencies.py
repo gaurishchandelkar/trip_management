@@ -28,9 +28,16 @@ def get_identity_provider(request: Request) -> IdentityProvider:
     return provider
 
 
+def get_secure_cookies(request: Request) -> bool:
+    """True when the app is served over https, so every cookie it sets or clears is Secure."""
+    secure: bool = request.app.state.secure_cookies
+    return secure
+
+
 StoreDep = Annotated[Store, Depends(get_store)]
 ClockDep = Annotated[Clock, Depends(get_clock)]
 IdentityProviderDep = Annotated[IdentityProvider, Depends(get_identity_provider)]
+SecureCookies = Annotated[bool, Depends(get_secure_cookies)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE)]
 
 
@@ -41,7 +48,7 @@ def get_current_member(store: StoreDep, clock: ClockDep, token: SessionToken = N
 CurrentMember = Annotated[Member, Depends(get_current_member)]
 
 
-def set_session_cookie(response: Response, token: str) -> None:
+def set_session_cookie(response: Response, token: str, secure: bool) -> None:
     response.set_cookie(
         SESSION_COOKIE,
         token,
@@ -49,4 +56,5 @@ def set_session_cookie(response: Response, token: str) -> None:
         path="/api",
         httponly=True,
         samesite="strict",
+        secure=secure,
     )

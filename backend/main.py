@@ -12,7 +12,7 @@ from backend.api.body_limit import BodySizeLimit
 from backend.api.errors import domain_error, invalid_request
 from backend.api.routes import router
 from backend.domain.errors import DomainError
-from backend.identity.config import google_provider
+from backend.identity.config import google_provider, serves_https
 from backend.storage.store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,6 +41,8 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     app = FastAPI(title="Trip Management", lifespan=lifespan)
     app.state.store = store
     app.state.identity_provider = provider
+    # Every cookie is Secure once TRIP_PUBLIC_URL is https (spec sso-registration).
+    app.state.secure_cookies = serves_https(os.environ)
     app.add_middleware(BodySizeLimit)
     app.add_exception_handler(RequestValidationError, invalid_request)
     app.add_exception_handler(DomainError, domain_error)

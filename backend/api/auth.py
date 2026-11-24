@@ -12,6 +12,7 @@ from fastapi.responses import RedirectResponse
 from backend.api.dependencies import (
     ClockDep,
     IdentityProviderDep,
+    SecureCookies,
     StoreDep,
     set_session_cookie,
 )
@@ -22,11 +23,7 @@ from backend.api.schemas import (
     ProvidersResponse,
     suggested_display_name,
 )
-from backend.domain.errors import (
-    LimitReachedError,
-    ProviderUnavailableError,
-    StorageUnavailableError,
-)
+from backend.domain.errors import ProviderUnavailableError, StorageUnavailableError
 from backend.domain.models import SIGN_IN_LIFETIME
 from backend.services import auth
 from backend.services.auth import Failure, NeedsRegistration, SignedIn, SignInFailed
@@ -52,12 +49,16 @@ def _failed(failure: Failure = Failure.FAILED) -> RedirectResponse:
     return _to_app(f"/?sign_in={failure}")
 
 
-def _clear_flow_cookie(response: Response) -> None:
-    response.delete_cookie(FLOW_COOKIE, path="/api/auth", httponly=True, samesite="lax")
+def _clear_flow_cookie(response: Response, secure: bool) -> None:
+    response.delete_cookie(
+        FLOW_COOKIE, path="/api/auth", httponly=True, samesite="lax", secure=secure
+    )
 
 
-def _clear_registration_cookie(response: Response) -> None:
-    response.delete_cookie(REGISTRATION_COOKIE, path="/api", httponly=True, samesite="strict")
+def _clear_registration_cookie(response: Response, secure: bool) -> None:
+    response.delete_cookie(
+        REGISTRATION_COOKIE, path="/api", httponly=True, samesite="strict", secure=secure
+    )
 
 
 @router.get("/auth/providers")
@@ -68,11 +69,15 @@ def providers(request: Request) -> ProvidersResponse:
 
 @router.get("/auth/google/start")
 def start(
-    provider: IdentityProviderDep, store: StoreDep, clock: ClockDep, return_to: str | None = None
+    provider: IdentityProviderDep,
+    store: StoreDep,
+    clock: ClockDep,
+    secure: SecureCookies,
+    return_to: str | None = None,
 ) -> RedirectResponse:
     try:
         started = auth.start_sign_in(store, provider, return_to, clock)
-    except (ProviderUnavailableError, LimitReachedError, StorageUnavailableError):
+    except (ProviderUnavailableError, StorageUnavailableError):
         return _failed()
     response = RedirectResponse(started.redirect_url, status_code=302)
     # Lax, not Strict: the callback is a top-level navigation from the provider's site, and a
@@ -84,6 +89,7 @@ def start(
         path="/api/auth",
         httponly=True,
         samesite="lax",
+        secure=secure,
     )
     return response
 
@@ -93,6 +99,7 @@ def callback(
     provider: IdentityProviderDep,
     store: StoreDep,
     clock: ClockDep,
+    secure: SecureCookies,
     flow_id: FlowId = None,
     code: str | None = None,
     state: str | None = None,
@@ -108,7 +115,7 @@ def callback(
             outcome = SignInFailed(Failure.FAILED)
         if isinstance(outcome, SignedIn):
             response = _to_app(outcome.return_to)
-            set_session_cookie(response, outcome.session_token)
+            set_session_cookie(response, outcome.session_token, secure)
         elif isinstance(outcome, NeedsRegistration):
             response = _to_app(REGISTER_PAGE)
             response.set_cookie(
@@ -118,10 +125,11 @@ def callback(
                 path="/api",
                 httponly=True,
                 samesite="strict",
+                secure=secure,
             )
         else:
             response = _failed(outcome.failure)
-    _clear_flow_cookie(response)
+    _clear_flow_cookie(response, secure)
     return response
 
 
@@ -146,11 +154,12 @@ def complete_registration(
     _provider: IdentityProviderDep,
     store: StoreDep,
     clock: ClockDep,
+    secure: SecureCookies,
     token: RegistrationToken = None,
 ) -> MemberResponse:
     member, session_token = auth.complete_registration(
         store, token, body.user_id, body.display_name, body.mobile, clock
     )
-    set_session_cookie(response, session_token)
-    _clear_registration_cookie(response)
+    set_session_cookie(response, session_token, secure)
+    _clear_registration_cookie(response, secure)
     return MemberResponse.of(member)

@@ -345,13 +345,15 @@ Deviations recorded now (code nit 11, 13):
 - Pending registrations are used with a select then delete under `BEGIN IMMEDIATE`, not `DELETE … RETURNING`. It's equally single-use, because the write lock serializes the two steps.
 - After a server `422`, Profile shows the combined hint without marking a field, because the server's fixed body can't say which field failed. The frontend's own checks, which run first, do mark the field.
 
-Left for the repo owner to decide, because each changes behaviour the spec states:
-- **Security low 2:** anyone who can reach the app can fill the 1,000 open sign-ins and block sign-in for 10 minutes. The fix is to evict the oldest flows instead of refusing.
-- **Security low 5:** set `Secure` on the cookies when `TRIP_PUBLIC_URL` is `https`.
+Decided by the repo owner ("both") and done, with the spec updated:
+- **Security low 2:** anyone who could reach the app could fill the 1,000 open sign-ins and block sign-in for 10 minutes. Now a full table drops the oldest open sign-in (`Store.drop_oldest_sign_ins`) and logs a warning. Tests: `test_a_full_table_drops_the_oldest_sign_in_to_make_room` (unit) and `test_a_full_table_still_lets_a_new_sign_in_through` (integration). Proof: with the drop disabled, the unit test fails.
+- **Security low 5:** `main` sets `app.state.secure_cookies` from `serves_https(env)`, and every cookie set or cleared (flow, pending registration, session, sign-out) carries `Secure` when `TRIP_PUBLIC_URL` is `https`. Tests: `test_serves_https_only_for_an_https_public_url` (unit) and `test_every_cookie_is_secure_only_when_served_over_https` (integration, http and https). Proof: with the flag forced off, the https case fails.
+
+Left as they are:
 - **Informational:** httpx2's 5-second timeout applies per phase, not to the whole request, and expired sessions are deleted only when presented (as on `main`).
 - **Human-owned:** `.env.example` has an indented comment line and no final newline.
 
-- [x] `code-reviewer` and `security-reviewer` findings fixed, apart from the three items left for the repo owner above.
+- [x] `code-reviewer` and `security-reviewer` findings fixed, apart from the informational and human-owned items above.
 
 ## Final verification
 

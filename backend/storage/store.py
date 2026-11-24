@@ -186,6 +186,17 @@ class Transaction:
         query = select(func.count()).select_from(sign_in_flows)
         return self._connection.execute(query).scalar_one()
 
+    def drop_oldest_sign_ins(self, keep: int) -> None:
+        """Deletes every open sign-in but the newest `keep`."""
+        newest = (
+            select(sign_in_flows.c.flow_hash)
+            .order_by(sign_in_flows.c.expires_at.desc())
+            .limit(keep)
+        )
+        self._connection.execute(
+            delete(sign_in_flows).where(sign_in_flows.c.flow_hash.not_in(newest))
+        )
+
     def count_pending_registrations(self) -> int:
         query = select(func.count()).select_from(pending_registrations)
         return self._connection.execute(query).scalar_one()

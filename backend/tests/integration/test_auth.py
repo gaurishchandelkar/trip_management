@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 
+from backend.api.dependencies import get_clock
 from backend.domain.errors import DomainError, IdentityRejectedError, ProviderUnavailableError
 from backend.domain.models import (
     MAX_OPEN_SIGN_INS,
@@ -18,6 +19,7 @@ from backend.domain.models import (
     PendingRegistration,
     SignInFlow,
 )
+from backend.main import create_app
 from backend.storage.schema import metadata
 from backend.storage.store import Store
 from backend.tests.integration.conftest import FakeClock
@@ -89,17 +91,17 @@ def test_provider_down_at_start_redirects_to_failed(
     assert "sign_in_flow" not in response.cookies
 
 
-def test_open_sign_in_cap_fails_new_starts(
-    client: TestClient, db_path: Path, clock: FakeClock
+def test_a_full_table_still_lets_a_new_sign_in_through(
+    client: TestClient, db_path: Path, clock: FakeClock, provider: FakeIdentityProvider
 ) -> None:
     with Store(db_path).transaction() as tx:
         for n in range(MAX_OPEN_SIGN_INS):
             later = clock.now + timedelta(minutes=5)
             tx.add_sign_in_flow(SignInFlow(f"f{n}", "google", "s", "n", "v", "/", later))
 
-    response = client.get(START, follow_redirects=False)
+    state = start(client)
 
-    assert response.headers["location"] == FAILED
+    assert come_back(client, state, provider.approve(state, "s-ada")) == REGISTER
 
 
 def test_expired_sign_ins_make_room_for_new_ones(
@@ -112,6 +114,54 @@ def test_expired_sign_ins_make_room_for_new_ones(
     response = client.get(START, follow_redirects=False)
 
     assert response.headers["location"].startswith(f"{AUTHORIZE_URL}?")
+
+
+# Secure cookies
+
+
+@pytest.mark.parametrize(
+    ("public_url", "secure"),
+    [("http://localhost:5173", False), ("https://trips.example.org", True)],
+)
+def test_every_cookie_is_secure_only_when_served_over_https(
+    db_path: Path,
+    clock: FakeClock,
+    provider: FakeIdentityProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    public_url: str,
+    secure: bool,
+) -> None:
+    monkeypatch.setenv("TRIP_PUBLIC_URL", public_url)
+    app = create_app(db_path)
+    app.dependency_overrides[get_clock] = lambda: clock
+    app.state.identity_provider = provider
+    headers: list[str] = []
+
+    with TestClient(app, base_url="https://testserver") as client:
+
+        def send(response: Any, status: int) -> None:
+            assert response.status_code == status, response.text
+            headers.extend(response.headers.get_list("set-cookie"))
+
+        # Register, sign out, then sign in again as a known member.
+        for _ in range(2):
+            started = client.get(START, follow_redirects=False)
+            send(started, 302)
+            state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
+            code = provider.approve(state, "s-ada")
+            back = client.get(
+                CALLBACK, params={"state": state, "code": code}, follow_redirects=False
+            )
+            send(back, 302)
+            if "pending_registration" in client.cookies:
+                send(client.post(REGISTRATION, json=ADA), 201)
+            send(client.post("/api/sign-out"), 204)
+
+    # Set and cleared: the flow cookie 4 times, the pending registration twice, the session 4.
+    assert sorted(header.split("=", 1)[0] for header in headers) == sorted(
+        ["sign_in_flow"] * 4 + ["pending_registration"] * 2 + ["session"] * 4
+    )
+    assert [("; secure" in header.lower()) for header in headers] == [secure] * len(headers)
 
 
 # return_to

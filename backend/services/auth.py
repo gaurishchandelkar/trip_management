@@ -15,7 +15,6 @@ from enum import StrEnum
 
 from backend.domain.errors import (
     IdentityRejectedError,
-    LimitReachedError,
     ProviderUnavailableError,
     UnauthenticatedError,
 )
@@ -93,7 +92,7 @@ def _log(provider: IdentityProvider, outcome: str, user_id: str | None = None) -
 def start_sign_in(
     store: Store, provider: IdentityProvider, return_to: str | None, now: Clock = utc_now
 ) -> SignInStart:
-    """Raises ProviderUnavailableError, or LimitReachedError when too many sign-ins are open."""
+    """Raises ProviderUnavailableError."""
     flow_id, state, nonce = (secrets.token_urlsafe(32) for _ in range(3))
     verifier = new_code_verifier()
     # Asked first, so a provider that's down leaves no flow behind.
@@ -101,7 +100,10 @@ def start_sign_in(
     with store.transaction() as tx:
         tx.delete_expired_sign_ins(now())
         if tx.count_sign_in_flows() >= MAX_OPEN_SIGN_INS:
-            raise LimitReachedError
+            # The oldest make room, rather than refusing: refusing would let anyone who can
+            # open 1,000 sign-ins lock everyone out for 10 minutes.
+            tx.drop_oldest_sign_ins(keep=MAX_OPEN_SIGN_INS - 1)
+            logger.warning("sign-in provider=%s open sign-ins full, oldest dropped", provider.name)
         tx.add_sign_in_flow(
             SignInFlow(
                 flow_hash=hash_token(flow_id),
