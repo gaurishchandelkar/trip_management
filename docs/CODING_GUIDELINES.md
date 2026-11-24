@@ -7,7 +7,7 @@
 3. Avoid overly defensive code. Validate at system boundaries (HTTP input, external data) and trust internal code.
 4. Name things after the domain, for example `get_greeting`, not `process_data`.
 5. Keep the README short. No emojis in code or docs.
-6. Edit files with the Edit and Write tools, not shell scripts. The guard can only check the content of Edit and Write calls. A script that opens a file for writing before reading it empties the file, and a multi-command shell script that fails part-way leaves some of its edits applied. In tool input, `\uXXXX` is decoded to the character itself, so write a doubled backslash to get an escape in the file. *Enforced by:* the guard hook asks before shell writes to check config or with suppressions; `scripts/harness-config.test.mjs` rejects invisible characters in tracked files.
+6. Edit files with the Edit and Write tools, not shell scripts. The guard can only check the content of Edit and Write calls. A script that opens a file for writing before reading it empties the file, and a multi-command shell script that fails part-way leaves some of its edits applied. In tool input, `\uXXXX` is decoded to the character itself, so write a doubled backslash to get an escape in the file. *Enforced by:* the guard hook asks before shell writes to check config or with suppressions, and before in-place shell edits of `backend/`, `frontend/`, `e2e/`, `scripts/`, `docs/` and the root `.md` files; `scripts/harness-config.test.mjs` rejects invisible characters in tracked files.
 
 ## Architecture
 

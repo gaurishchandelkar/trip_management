@@ -28,14 +28,14 @@ Entry format:
 ## 2026-11-24: The plan drifted from the code after follow-up commits
 - Signal: repeated review feedback
 - What happened: After the security follow-ups, `code-reviewer` found the plan still said "Cookies without `Secure`: unchanged" and recorded test counts from three commits earlier. This is the same kind of drift as the earlier coverage-row findings: the plan is ticked once and later commits don't revisit it.
-- Improvement: skill, drafted and awaiting the human's approval (`.claude/` is protected). Proposed `/handover` step 1a: "If commits landed after `/implement`, re-read the plan's design decisions and Final verification line against `git diff` of those commits, and update any that the code no longer matches."
+- Improvement: skill, approved by the human. `/handover` step 3 now says: if commits landed after `/implement`, re-read the plan's design decisions, human-attention items and Final verification line against `git diff` of those commits, update what the code no longer matches, test counts included, and mark superseded decisions as superseded.
 - Enforced: documented only (whether prose still matches the code needs judgment; the coverage-table check already covers test names)
 
 ## 2026-11-24: Source and docs were edited by shell scripts
 - Signal: harness defect
 - What happened: Through this feature the agent edited tracked files with `sed -i` and Python `write_text` heredocs, against `docs/CODING_GUIDELINES.md` rule 6, including docs and backend code in the review fixes. Nothing broke, but those edits skipped the guard's content checks. Run against the commands used, the guard asked for the ones touching `.claude/` but returned nothing for `sed -i` on `backend/services/auth.py` or `write_text` on `docs/SPEC.md`: it asks only when a shell write names check config or contains a suppression.
-- Improvement: safeguard, drafted and awaiting the human's approval (`.claude/hooks/` is protected). Proposed: `guard.mjs` asks before an in-place shell edit (`sed -i`, `perl -i`, `write_text`, `open(..., "w")`, `writeFileSync`, `Set-Content`, `Out-File`, or `>` into a path) that names `backend/`, `frontend/`, `e2e/`, `scripts/`, `docs/` or a root `.md`, with cases for each in `.claude/hooks/guard.test.mjs`.
-- Enforced: documented only until approved
+- Improvement: safeguard, approved by the human. `guard.mjs` asks before an in-place shell edit (`sed -i`, `perl -i`, `tee`, `write_text`, `open(..., "w")`, `writeFileSync`, `Set-Content`, `Add-Content`, `Out-File`) that names `backend/`, `frontend/`, `e2e/`, `scripts/`, `docs/`, `README.md`, `AGENTS.md` or `CLAUDE.md`, and before a `>` redirect into one. Reading (`sed -n`), formatters and writes outside those paths stay silent. Proof: the 8 new "ask" cases in `.claude/hooks/guard.test.mjs` fail against the old guard and pass now.
+- Enforced: yes (unit stage, `node --test` on `.claude/hooks/*.test.mjs`); like every guard rule, it matches command text, so it's a seatbelt
 
 ## 2026-11-24: A Google client secret was pasted into the session
 - Signal: security issue
@@ -46,13 +46,13 @@ Entry format:
 ## 2026-11-24: Agents may run npm run pr
 - Signal: security issue
 - What happened: `security-reviewer` noted that the allow rule `Bash(npm run *)` in `.claude/settings.json` covers `npm run pr`, which runs `gh pr create`. Once the human pushes a branch, an agent could open its PR unasked, though `docs/PROCESS.md` says a human opens PRs.
-- Improvement: safeguard, drafted and awaiting the human's approval (`.claude/settings.json` is protected). Proposed deny rules: `Bash(npm run pr*)`, `Bash(gh pr create*)`, `PowerShell(npm run pr*)` and `PowerShell(gh pr create*)`, with a case in the settings test. The human's own `!` commands aren't affected.
-- Enforced: documented only until approved
+- Improvement: safeguard, approved by the human. `.claude/settings.json` denies `npm run pr` and `gh pr create` (with and without arguments) for both shell tools, and the settings test checks each. The guard also denies them where a command starts, including `node scripts/open-pr.mjs` and `gh.exe` by its full path, while a grep or commit message that only mentions them still runs. The human's own `!` commands aren't affected. Proof: the 5 new "deny" cases and the settings test fail against the old guard and settings, and pass now.
+- Enforced: yes (unit stage)
 
 ## 2026-11-24: A dependency was tried under strict typing before the plan named it
 - Signal: successful pattern
 - What happened: The spec approved Authlib. While planning, a quick try of its OAuth client under `pyright --strict` gave 4 errors that only suppressions would silence, so the plan proposed joserfc (Authlib's typed JOSE library) plus httpx2 instead, and the human approved it at plan approval. Implementation then had no typing surprises. The in-process fake provider for integration tests and the real-token fake server for E2E also worked well: CI never needs Google.
-- Improvement: skill, drafted and awaiting the human's approval (`.claude/skills/` is protected). Proposed addition to `/plan` step 6: "For a new dependency, also try the calls you'll use under `pyright --strict` or `tsc` before naming it. A library that needs suppressions breaks the Suppressions rule."
+- Improvement: skill, approved by the human. `/plan` step 6 now says to try a new dependency's calls under strict typing (`pyright --strict` or `tsc --strict`) in a scratch file outside the repo before naming it, and to propose a typed alternative when it only passes with suppressions.
 - Enforced: documented only (a try-out is a judgment step)
 
 ## 2026-11-24: The project's /ship was hidden by Claude Code's own

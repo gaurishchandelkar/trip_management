@@ -36,6 +36,29 @@ const cases = [
   ["Bash", { command: "sed -i 's/fail_under = 80/fail_under = 0/' pyproject.toml" }, "ask"],
   ["Bash", { command: "echo 'x = 1  # noqa' >> backend/x.py" }, "ask"],
   ["PowerShell", { command: "Set-Content package.json -Value $json" }, "ask"],
+  // Shell edits of source, tests and docs ask: rule 6 (sso-registration retro)
+  ["Bash", { command: "sed -i 's/a/b/' backend/services/auth.py" }, "ask"],
+  ["Bash", { command: "python - <<'EOF'\nPath(\"docs/SPEC.md\").write_text(t)\nEOF" }, "ask"],
+  ["Bash", { command: "cat > docs/notes.md <<'EOF'\nx\nEOF" }, "ask"],
+  ["Bash", { command: "perl -pi -e 's/a/b/' frontend/src/App.tsx" }, "ask"],
+  ["Bash", { command: "echo x | tee e2e/x.py" }, "ask"],
+  ["Bash", { command: `node -e "fs.writeFileSync('scripts/x.mjs', s)"` }, "ask"],
+  ["Bash", { command: "echo x >> README.md" }, "ask"],
+  ["PowerShell", { command: "Set-Content CLAUDE.md 'x'" }, "ask"],
+  ["Bash", { command: "sed -n '1,5p' backend/main.py" }, null],
+  ["Bash", { command: "uv run pytest backend/tests > test-output.txt" }, null],
+  ["Bash", { command: "uv run ruff format backend" }, null],
+  ["Bash", { command: "sed -i 's/a/b/' /c/Users/me/scratchpad/notes.txt" }, null],
+  // Agents never open PRs (sso-registration retro); mentioning the command is fine
+  ["Bash", { command: "npm run pr -- sso-registration" }, "deny"],
+  ["Bash", { command: "git status && npm run pr" }, "deny"],
+  ["Bash", { command: "node scripts/open-pr.mjs x" }, "deny"],
+  ["Bash", { command: 'gh pr create --title "x" --body y' }, "deny"],
+  ["PowerShell", { command: '& "C:\\Program Files\\GitHub CLI\\gh.exe" pr create -t x' }, "deny"],
+  ["Bash", { command: 'grep -rn "npm run pr" docs' }, null],
+  ["Bash", { command: 'git commit -m "Tell the human to run npm run pr"' }, null],
+  ["Bash", { command: "npm run pretty" }, null],
+  ["Bash", { command: "gh pr view 18" }, null],
   // Reading, searching and dependency commands stay silent
   ["Bash", { command: 'grep -rn "type: ignore" backend' }, null],
   ["Bash", { command: "grep -n noqa backend/x.py 2>/dev/null" }, null],
@@ -97,5 +120,8 @@ test("settings route every shell tool through the guard and deny push for each",
   for (const tool of SHELL_TOOLS) {
     assert.ok(guarded.includes(tool), `${tool} is not routed through the guard`);
     assert.ok(settings.permissions.deny.includes(`${tool}(git push *)`), `${tool} can push`);
+    for (const rule of ["npm run pr", "npm run pr *", "gh pr create", "gh pr create *"]) {
+      assert.ok(settings.permissions.deny.includes(`${tool}(${rule})`), `${tool} can open a PR`);
+    }
   }
 });

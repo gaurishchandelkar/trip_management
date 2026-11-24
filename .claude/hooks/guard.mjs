@@ -16,6 +16,12 @@ const SHELL_RULES = [
     "Never disable git hooks.",
   ],
   [ENV_FILE, "Never access .env files. Ask a human to set secrets."],
+  // A human opens PRs (docs/PROCESS.md). Matched where a command starts, so text that only
+  // mentions `npm run pr` (a grep, a commit message) still runs.
+  [
+    /(?:^|[;&|(]\s*|\n\s*)(?:npm\s+run\s+pr(?:\s|$)|node\s+\S*open-pr\.mjs|["']?(?:[^"'\n]*[/\\])?gh(?:\.exe)?["']?\s+pr\s+create\b)/,
+    "Agents never open PRs. Give the human `npm run pr -- <name>`.",
+  ],
 ];
 
 const SUPPRESSION =
@@ -39,6 +45,15 @@ const PROTECTED_IN_SHELL =
 const SHELL_WRITE =
   /(?<![\d&])>|\btee\b|\bsed\s+-i\b|\bopen\([^)]*["'][wa+]|\bwrite_text\b|\bwriteFileSync\b|\b(?:Set|Add)-Content\b|\bOut-File\b/;
 const CHECK_CONFIG = /\b(?:pyproject\.toml|package\.json|vite\.config\.ts)\b/;
+
+// docs/CODING_GUIDELINES.md rule 6: source, tests and docs are edited with Edit or Write, which
+// the content checks below can see (sso-registration retro).
+const IN_PLACE_EDIT =
+  /\bsed\s+-i|\bperl\s+-\w*i|\btee\b|\bwrite_text\b|\bopen\([^)]*["'][wa+]|\bwriteFileSync\b|\b(?:Set|Add)-Content\b|\bOut-File\b/;
+const SOURCE_PATH =
+  /(?<![\w.-])(?:backend|frontend|e2e|scripts|docs)[/\\]|(?<![\w.-])(?:README|AGENTS|CLAUDE)\.md\b/;
+const REDIRECT_TO_SOURCE =
+  /(?<![\d&])>>?\s*["']?(?:\.[/\\])?(?:(?:backend|frontend|e2e|scripts|docs)[/\\]|(?:README|AGENTS|CLAUDE)\.md\b)/;
 
 function relative(filePath, projectDir) {
   return path.relative(projectDir, path.resolve(projectDir, filePath)).split(path.sep).join("/");
@@ -65,6 +80,16 @@ export function evaluate({ tool_name: toolName, tool_input: input = {} }, projec
         decision: "ask",
         reason:
           "Shell writes skip the guard's content checks. Use Edit or Write for check config and suppressions, or ask.",
+      };
+    }
+    if (
+      (IN_PLACE_EDIT.test(command) && SOURCE_PATH.test(command)) ||
+      REDIRECT_TO_SOURCE.test(command)
+    ) {
+      return {
+        decision: "ask",
+        reason:
+          "Edit source, tests and docs with Edit or Write, so the guard can check them (docs/CODING_GUIDELINES.md rule 6).",
       };
     }
     return null;

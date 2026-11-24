@@ -13,6 +13,7 @@ Prepare `feat/$ARGUMENTS` for review.
 1. Run `npm run check`. If any stage fails, stop and fix it (or go back to `/implement`).
 2. Run the **code-reviewer** and **security-reviewer** subagents in parallel on `git diff main...HEAD`.
 3. Fix every blocking finding and commit the fixes. List the non-blocking findings you didn't fix in the PR description.
+   - If any commits landed after `/implement` (review fixes, follow-ups), re-read the plan's design decisions, **Human attention needed** items and **Final verification** line against `git diff` of those commits. Update any that the code no longer matches, including test counts, and mark a superseded decision as superseded rather than deleting it.
 4. Write the PR description to `.git/PR_BODY_$ARGUMENTS.md` using `.github/PULL_REQUEST_TEMPLATE.md`:
    - Link the spec and plan, and copy their **Human attention needed** items.
    - Paste the final `npm run check` stage summary as evidence.
