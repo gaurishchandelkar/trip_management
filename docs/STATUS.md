@@ -24,7 +24,7 @@
   - E2E signs people in through a fake Google (`e2e/fake_google.py`, port 8102) that issues real RS256 ID tokens. The traffic check allows that one extra origin.
   - `e2e/test_screenshots.py` captures 24 screenshots of the main screens against its own servers (ports 8101 and 5274) with fixed sample data.
 - **CI:** GitHub Actions runs one job per stage. The functional job uploads the screenshots as `ui-screenshots` on every run, kept 14 days, and lists them in its job summary (`scripts/screenshot-summary.mjs`). `npm run pr` attaches the same 24 captures to a PR that changes the UI, refusing a partial or stale set, and opens PRs with or without a spec. Dependabot and CODEOWNERS are configured. GitHub doesn't protect `main`: the repo is private on a free plan, so GitHub refuses branch protection (403). A lefthook pre-commit job (`scripts/refuse-main.mjs`) refuses local commits on `main` instead. Once the plan changes, `scripts/protect-branch.mjs --solo` requires PRs, an up-to-date branch and all 7 CI checks, admins included.
-- **Staged autonomy:** the `/spec`, `/plan`, `/implement`, `/ship` and `/retro` skills, the `code-reviewer` and `security-reviewer` subagents, and the PR template.
+- **Staged autonomy:** the `/spec`, `/plan`, `/implement`, `/handover` and `/retro` skills, the `code-reviewer` and `security-reviewer` subagents, and the PR template.
 - **Flywheel and metrics:** `docs/HARNESS_LOG.md`, `docs/METRICS.md` and `npm run metrics`.
 - **Reference example:** `docs/specs/personalised-greeting.md` and `docs/plans/PLAN_personalised-greeting.md`.
 
@@ -35,7 +35,7 @@
   - Phase 2 done: the backend sign-in and registration API (`/api/auth/...`) and the `identities`, `sign_in_flows` and `pending_registrations` tables. Google is on when `TRIP_GOOGLE_CLIENT_ID` and `TRIP_GOOGLE_CLIENT_SECRET` are set.
   - Phase 3 done: the app signs people in only with **Continue with Google**, and new people pick a user ID, display name and mobile number on **Finish registering** (`/register/complete`). `POST /api/members` and `POST /api/sign-in` are gone, and `members.mobile` is required. An old `trip.db` stops startup with a message to delete it. E2E signs in through a fake Google (`e2e/fake_google.py`, port 8102).
   - Phase 4 done: every person shows their display name with `@user-id` beside it (banner, cards, members, requests, Approve/Reject labels). Group detail carries `user_id`, groups carry `owner_user_id`, and only a group's owner gets mobile numbers, shown as `tel:` links.
-  - Phase 5 done: **Profile** (`/profile`, `POST /api/me/profile`) edits the display name and mobile; the screenshot set is 24 images; docs updated. Left for `/ship`: `code-reviewer` and `security-reviewer`. A real Google sign-in on `localhost` was confirmed by the repo owner on 2026-11-24.
+  - Phase 5 done: **Profile** (`/profile`, `POST /api/me/profile`) edits the display name and mobile; the screenshot set is 24 images; docs updated. Left for `/handover`: `code-reviewer` and `security-reviewer`. A real Google sign-in on `localhost` was confirmed by the repo owner on 2026-11-24.
   - Follow-up: `npm run dev` loads the git-ignored `.env` when it exists (`scripts/dev-backend.mjs`), so the Google credentials can live there. `.env.example` lists the names.
 
 ## Known gaps

@@ -20,7 +20,7 @@ Work moves through stages, and each stage leaves an artifact behind. Humans spen
 | **Gate: approve plan** | **Human** | Plan reviewed | |
 | 3. Implement | Agent | Commits, one per phase | `/implement` |
 | 4. Verify | Agent + tools | `npm run check` output, ticked criteria | `/implement` |
-| 5. Ship | Agent | Branch and PR description | `/ship` |
+| 5. Ship | Agent | Branch and PR description | `/handover` |
 | **Gate: approve PR** | **Human** | Review on the "human attention needed" items | |
 | 6. Learn | Agent, human confirms | `docs/HARNESS_LOG.md` entry, harness change | `/retro` |
 

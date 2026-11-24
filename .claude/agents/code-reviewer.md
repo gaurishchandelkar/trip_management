@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews a diff against the spec, docs/RULES.md and docs/CODING_GUIDELINES.md. Use before /ship, or whenever code review is requested. Read-only.
+description: Reviews a diff against the spec, docs/RULES.md and docs/CODING_GUIDELINES.md. Use before /handover, or whenever code review is requested. Read-only.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---

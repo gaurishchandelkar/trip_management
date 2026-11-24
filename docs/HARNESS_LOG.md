@@ -13,6 +13,12 @@ Entry format:
 - Enforced: yes (<check that now catches it>) | documented only (<why it can't be enforced>)
 ```
 
+## 2026-11-24: The project's /ship was hidden by Claude Code's own
+- Signal: harness defect
+- What happened: Claude Code added a built-in `/ship` skill that commits, pushes and opens a PR. It took the name, so typing `/ship sso-registration` ran the built-in one, which only printed its usage or refused to start. It never reached this repo's stage-5 skill. Had it run, it would have pushed, which the hard lines forbid agents to do.
+- Improvement: skill. `.claude/skills/ship/` is renamed `.claude/skills/handover/`, matching its "Hand over" step, and the live references now say `/handover`: `CLAUDE.md`, `README.md`, `docs/PROCESS.md`, `docs/STATUS.md`, the `implement` skill, both reviewer subagents and `scripts/open-pr.mjs`. Older entries here and in done plans still say `/ship`, because that was its name then.
+- Enforced: documented only (a tool's built-in command names can't be checked from the repo; the skill list Claude Code shows is where a clash appears)
+
 ## 2026-10-27: PRs without a spec were opened by hand
 - Signal: repetitive task
 - What happened: `npm run pr` refused any change without a spec ("No spec at docs/specs/<name>.md"), since it took the title from the spec. So PRs #6 (a retro), #7 (the README) and #8 (PR screenshots) were each opened with a hand-built `gh pr create` line run from its full Windows path. That line was too long for the human to type without wrapping, which the `CLAUDE.md` command-length rule exists to avoid.

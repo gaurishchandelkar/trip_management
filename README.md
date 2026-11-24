@@ -95,7 +95,7 @@ Why each piece was chosen, and what was ruled out, is in [`docs/TECH_STACK.md`](
 
 Caravan is developed by coding agents inside the Agentic Harness from [AI Agents in the Fast Lane: Engineering for Hyper Productivity](https://medium.com/@gaurish-chandelkar/ai-agents-in-the-fast-lane-engineering-for-hyper-productivity-fcbcd902ee9a). Agents plan, implement and test; humans own intent, architecture and approval.
 
-- **Staged work:** `/spec` → `/plan` → *a human approves* → `/implement` → `/ship` → *a human merges* → `/retro`. Each feature's spec and plan are in [`docs/specs/`](docs/specs/) and [`docs/plans/`](docs/plans/), and the stages are in [`docs/PROCESS.md`](docs/PROCESS.md).
+- **Staged work:** `/spec` → `/plan` → *a human approves* → `/implement` → `/handover` → *a human merges* → `/retro`. Each feature's spec and plan are in [`docs/specs/`](docs/specs/) and [`docs/plans/`](docs/plans/), and the stages are in [`docs/PROCESS.md`](docs/PROCESS.md).
 - **Safeguards:** strict linting and type checks, layer contracts, dependency and secrets scans, git hooks, and a guard hook that blocks agents from pushing, skipping hooks or reading secrets.
 - **Evidence:** `npm run check` runs the same seven stages locally and in CI, and must pass before any hand-over.
 - **Flywheel:** after each PR, `/retro` turns failures and review findings into new tests, rules or safeguards, recorded in [`docs/HARNESS_LOG.md`](docs/HARNESS_LOG.md).

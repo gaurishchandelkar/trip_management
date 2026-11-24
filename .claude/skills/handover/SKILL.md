@@ -1,10 +1,10 @@
 ---
-name: ship
+name: handover
 description: Prepare a finished branch for human review - full checks, reviewer subagents, and a PR description. Agents never push; the human opens the PR.
 argument-hint: <plan name>
 ---
 
-# /ship: Stage 5, Ship
+# /handover: Stage 5, Ship
 
 Prepare `feat/$ARGUMENTS` for review.
 

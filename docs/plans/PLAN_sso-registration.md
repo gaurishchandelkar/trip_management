@@ -66,7 +66,7 @@ Using a flow or a pending registration is a conditional `DELETE … RETURNING`, 
   - `scripts/screenshot-summary.test.mjs`
   - `scripts/open-pr.mjs` (comment) and `scripts/open-pr.test.mjs`
   - `docs/PROCESS.md`, `docs/STATUS.md`, `README.md`
-  - `.claude/skills/ship/SKILL.md`, a `.claude/` change that needs your approval in the PR
+  - `.claude/skills/handover/SKILL.md` (then named `ship`), a `.claude/` change that needs your approval in the PR
 
   The partial-or-stale refusal stays the same. Historical entries in `docs/HARNESS_LOG.md`, and the done spec and plan for CI screenshots, are left as they were.
 - **A temporarily nullable `mobile` (Phases 2–3):** Phase 2 adds the new routes while the old forms still exist, so every phase can end with a full green `npm run check`. The old `POST /api/members` can't supply a mobile number, so the column is nullable until Phase 3 retires the old routes and makes it `NOT NULL`. Because of the fresh start, there's no migration in between. Delete your local `trip.db` after pulling.
@@ -357,7 +357,7 @@ Left for the repo owner to decide, because each changes behaviour the spec state
 
 - [x] `npm run check` passes *All 7 stages, with this plan at Done: 157 backend unit (90% coverage), 263 vitest, 173 integration, 73 E2E, 24 screenshots.*
 - [x] Every acceptance criterion in the spec is covered by a test (table below)
-- [x] `code-reviewer` and `security-reviewer` run before `/ship` *Run on 2026-11-24; findings and fixes under "Follow-up: review findings".*
+- [x] `code-reviewer` and `security-reviewer` run before `/handover` *Run on 2026-11-24; findings and fixes under "Follow-up: review findings".*
 - [x] The human signs in once with a real Google account on `localhost` (manual, spec Definition of Done) *Confirmed by the repo owner on 2026-11-24, with the credentials loaded from `.env`.*
 
 ### Spec coverage

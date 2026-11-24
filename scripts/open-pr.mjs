@@ -1,4 +1,4 @@
-// Opens a PR from the description in .git/PR_BODY_<name>.md, written by /ship, /retro or a small
+// Opens a PR from the description in .git/PR_BODY_<name>.md, written by /handover, /retro or a small
 // change (docs/PROCESS.md). For the human to run. Usage: npm run pr -- <name>
 // One short command, because a long `gh pr create` line wraps in a terminal and the break ends up
 // in the PR title, and gh may be installed but missing from Git Bash's PATH
@@ -92,7 +92,7 @@ function main() {
   const bodyPath = `.git/PR_BODY_${name}.md`;
   if (!existsSync(bodyPath))
     return fail(
-      `No PR body at ${bodyPath}. Run /ship ${name}, or for a small change write it as docs/PROCESS.md says.`,
+      `No PR body at ${bodyPath}. Run /handover ${name}, or for a small change write it as docs/PROCESS.md says.`,
     );
   const spec = existsSync(specPath) ? readFileSync(specPath, "utf8") : null;
   const pr = titleAndBody(spec, readFileSync(bodyPath, "utf8"));
