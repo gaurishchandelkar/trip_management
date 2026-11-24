@@ -23,7 +23,7 @@ export function changesUi(changedFiles) {
 }
 
 /**
- * `--attach` arguments for the 20 captures, in screen order with alt text such as
+ * `--attach` arguments for the 24 captures, in screen order with alt text such as
  * "sign in, dark, 360 px". Refuses a partial set, or one older than the branch's last UI change.
  */
 export function screenshotAttachments(dir, files, lastUiChangeMs) {

@@ -26,7 +26,7 @@ from pytest_playwright import CreateContextCallback
 from e2e.app import api, form, google_account, section
 from e2e.network import ApiTraffic, Signature
 
-SCREENS = ("sign-in", "home", "new-group-dialog", "group", "not-found")
+SCREENS = ("sign-in", "home", "new-group-dialog", "group", "profile", "not-found")
 THEMES = ("light", "dark")
 WIDTHS = (360, 1280)
 OUT = Path(__file__).resolve().parent.parent / "test-results" / "screenshots"
@@ -157,6 +157,14 @@ def _group(page: Page, show: Showcase) -> list[Signature]:
     return [ME, ("GET", path, {})]
 
 
+def _profile(page: Page, show: Showcase) -> list[Signature]:
+    with page.expect_response(api("GET", "/api/me")):
+        page.goto(f"{show.base_url}/profile")
+    _loaded(page, "Profile")
+    expect(form(page, "Profile").get_by_label("Mobile number")).to_have_value("+447700900123")
+    return [ME]
+
+
 def _not_found(page: Page, show: Showcase) -> list[Signature]:
     with page.expect_response(api("GET", "/api/me")):
         page.goto(f"{show.base_url}/nowhere")
@@ -176,13 +184,14 @@ CAPTURES = {
     "home": Capture(signed_in=True, load=_home),
     "new-group-dialog": Capture(signed_in=True, load=_new_group_dialog),
     "group": Capture(signed_in=True, load=_group),
+    "profile": Capture(signed_in=True, load=_profile),
     "not-found": Capture(signed_in=True, load=_not_found),
 }
 
 
 def test_every_screen_is_captured() -> None:
     # Written out, not derived from SCREENS: dropping a screen from both still fails here.
-    expected = {"sign-in", "home", "new-group-dialog", "group", "not-found"}
+    expected = {"sign-in", "home", "new-group-dialog", "group", "profile", "not-found"}
 
     assert set(SCREENS) == expected
     assert set(CAPTURES) == expected

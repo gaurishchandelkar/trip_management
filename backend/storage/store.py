@@ -147,6 +147,14 @@ class Transaction:
         ).first()
         return _member(row) if row else None
 
+    def update_member(self, member: Member) -> None:
+        """Replaces a member's display name and mobile. The user ID never changes."""
+        self._connection.execute(
+            update(members)
+            .where(members.c.user_id == member.user_id)
+            .values(display_name=member.display_name, mobile=member.mobile)
+        )
+
     # Provider accounts
 
     def add_identity(self, provider: str, subject: str, user_id: str) -> None:

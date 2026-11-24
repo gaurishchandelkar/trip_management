@@ -1,7 +1,7 @@
 # Plan: Registration and sign-in with Google
 
 Spec: `docs/specs/sso-registration.md`
-Status: **In progress** <!-- Awaiting approval | Approved | In progress | Done -->
+Status: **Done** <!-- Awaiting approval | Approved | In progress | Done -->
 Approved: 2026-11-23 by the repo owner, in conversation, with joserfc + httpx2 for the OIDC adapter (D4 amended).
 
 ## Approach
@@ -255,7 +255,7 @@ Success criteria:
   - the owner's detail has `mobile` for each member and requester;
   - a member's detail, a non-member's detail, browse, my-groups and join-request responses contain no `mobile` key anywhere (a recursive key search);
   - every summary has `owner_user_id`.
-- [x] Unit tests (`test_groups_service.py`): `can_see_mobile` for owner, member, requester and stranger. *`test_only_the_owner_sees_mobile_numbers`; the rule is `can_see_mobiles(viewer_status)` in `backend/domain/models.py`, applied in `services/groups.py::group_detail`.*
+- [x] Unit tests (`test_groups_service.py`): `can_see_mobile` for owner, member, requester and stranger. *`test_only_the_owner_sees_mobile_numbers`; the rule is `can_see_mobiles(viewer_status)` in `backend/domain/models.py`, applied by `group_detail` in `backend/services/groups.py`.*
 - [x] Vitest: the banner shows the name and `@ada`; the cards show `(@ada)`; owner rows have `tel:+919876543210` links and the buttons are labelled with the name and ID; a member's view has no `tel:` link; two "Ada"s are told apart by `@id`.
 - [x] `frontend/src/theme/tokens.test.ts` still passes with the muted `@id` colour in both themes. *`@id` uses the existing `--color-text-muted`, already in the contrast pairs on `--color-bg` and `--color-surface`; no new colour.*
 - [x] E2E outside: the owner sees the requester's `@id` and phone link, and the requester, once a member, sees `@id` but no phone link. E2E inside: the member's `GET /api/groups/<id>` body has no `mobile`.
@@ -282,7 +282,7 @@ Deviations: people in group detail are a new domain type, `Person(user_id, displ
   - `docs/PROCESS.md`.
 
 Success criteria:
-- [ ] Integration tests (`backend/tests/integration/test_profile.py`):
+- [x] Integration tests (`backend/tests/integration/test_profile.py`):
   - a mobile change → `200` with the normalized number, and `GET /api/me` shows it;
   - the owner's group detail then shows the new number, and the old one is in no table;
   - a display-name change shows in the owner's detail, while the user ID, memberships, pending requests and session are unchanged;
@@ -290,23 +290,23 @@ Success criteria:
   - unchanged values → `200`, the same;
   - no session → `401`;
   - two concurrent saves on a `Barrier` → one of the two complete profiles, never a mix.
-- [ ] Unit test (`test_members_service.py::test_profile_update_logs_fields_not_values`): the log names the changed fields, and contains neither the old nor the new values.
-- [ ] Vitest (`Profile.test.tsx`):
+- [x] Unit test (`backend/tests/unit/test_members_service.py::test_profile_update_logs_fields_not_values`): the log names the changed fields, and contains neither the old nor the new values.
+- [x] Vitest (`Profile.test.tsx`):
   - shows the user ID as text, not an input, and fills the current values;
   - a bad mobile is refused with no request sent;
   - a double click sends one request;
   - success shows "Profile saved." and updates the banner name;
   - `401` returns to sign-in at `/profile`.
-- [ ] E2E outside: change the mobile number on Profile, and the owner sees the new number on the group. E2E inside: Save makes exactly one `POST /api/me/profile` (200).
-- [ ] `node --test scripts/screenshot-summary.test.mjs scripts/open-pr.test.mjs` passes with 24, and `npm run check -- functional` writes exactly 24 files to `test-results/screenshots/`.
-- [ ] Browser check with the Playwright MCP server against `npm run dev` at 360 px and 1280 px: Profile shows no sideways scroll, and Save works by keyboard alone.
-- [ ] Docs updated, and `rg -n "\b20\b (screenshots|captures)" docs/PROCESS.md docs/STATUS.md README.md .claude scripts` finds nothing.
-- [ ] `npm run check` passes.
+- [x] E2E outside: change the mobile number on Profile, and the owner sees the new number on the group. E2E inside: Save makes exactly one `POST /api/me/profile` (200). *`test_member_changes_their_mobile_number`, `test_saving_the_profile_posts_once` (a double click, one POST; opening Profile makes no call).*
+- [x] `node --test scripts/screenshot-summary.test.mjs scripts/open-pr.test.mjs` passes with 24, and `npm run check -- functional` writes exactly 24 files to `test-results/screenshots/`.
+- [x] Browser check with the Playwright MCP server against `npm run dev` at 360 px and 1280 px: Profile shows no sideways scroll, and Save works by keyboard alone. *Run against the dev backend and Vite on `127.0.0.1` with the fake Google (no real credentials), on a scratch database: signed up through Continue with Google and Finish registering, then on `/profile` at 360 px typed a new number, Tab to **Save**, Enter: "Profile saved.", the number came back as `+447700900999`. No sideways scroll at 360 or 1280 px. It also found the banner's **Profile** link only 44 px wide by its text at 360 px; it now has a 44 px minimum width.*
+- [x] Docs updated, and `rg -n "\b20\b (screenshots|captures)" docs/PROCESS.md docs/STATUS.md README.md .claude scripts` finds nothing. *Also `.github/PULL_REQUEST_TEMPLATE.md` ("lists all 24"), which the Human-attention list missed. `docs/plans/PLAN_ci-screenshot-artifacts.md` (Done) names the renamed summary test.*
+- [x] `npm run check` passes.
 
 ## Final verification
 
-- [ ] `npm run check` passes
-- [ ] Every acceptance criterion in the spec is covered by a test (table below)
+- [x] `npm run check` passes *All 7 stages, with this plan at Done: 157 backend unit (90% coverage), 263 vitest, 173 integration, 73 E2E, 24 screenshots.*
+- [x] Every acceptance criterion in the spec is covered by a test (table below)
 - [ ] `code-reviewer` and `security-reviewer` run before `/ship` (left for `/ship`)
 - [ ] The human signs in once with a real Google account on `localhost` (manual, spec Definition of Done)
 
@@ -343,7 +343,7 @@ Success criteria:
 | Saving a new mobile sends the POST, returns the normalized number, shows Profile saved | `backend/tests/integration/test_profile.py::test_changing_the_mobile_returns_it_normalized`, `frontend/src/Profile.test.tsx::shows Profile saved and updates the banner`, `e2e/test_network_contract.py::test_saving_the_profile_posts_once` |
 | Owner sees the new number next time; the old one isn't stored | `backend/tests/integration/test_profile.py::test_owner_sees_the_new_mobile_and_the_old_one_is_gone`, `e2e/test_journeys.py::test_member_changes_their_mobile_number` |
 | Changed display name shows everywhere; user ID, groups, requests and session unchanged | `backend/tests/integration/test_profile.py::test_changing_the_name_keeps_everything_else` |
-| Invalid profile input: nothing sent, field marked, text kept; server 422 changes nothing | `frontend/src/Profile.test.tsx::refuses %s without sending a request`, `backend/tests/integration/test_profile.py::test_invalid_profile_changes_nothing` |
+| Invalid profile input: nothing sent, field marked, text kept; server 422 changes nothing | `frontend/src/Profile.test.tsx::refuses %s %j without sending a request`, `backend/tests/integration/test_profile.py::test_invalid_profile_changes_nothing` |
 | `user_id` or unknown field in the body → 422, nothing changed | `backend/tests/integration/test_profile.py::test_user_id_cannot_be_changed` |
 | Unchanged values → 200 with the same profile | `backend/tests/integration/test_profile.py::test_saving_unchanged_values_is_idempotent` |
 | No session: signed-out screen, 401, back on `/profile` after signing in | `backend/tests/integration/test_profile.py::test_profile_needs_a_session`, `frontend/src/Profile.test.tsx::returns to sign-in at the same address on 401` |

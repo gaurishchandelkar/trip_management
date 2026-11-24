@@ -5,7 +5,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-export const SCREENS = ["sign-in", "home", "new-group-dialog", "group", "not-found"];
+export const SCREENS = ["sign-in", "home", "new-group-dialog", "group", "profile", "not-found"];
 export const THEMES = ["light", "dark"];
 export const WIDTHS = [360, 1280];
 

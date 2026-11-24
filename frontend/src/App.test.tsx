@@ -173,6 +173,16 @@ describe("app shell", () => {
     expect(screen.queryByText("+919876543210")).toBeNull();
   });
 
+  it("the Profile link opens the profile screen", async () => {
+    vi.mocked(getMe).mockResolvedValue(ADA);
+    renderApp();
+
+    await userEvent.click(await screen.findByRole("link", { name: "Profile" }));
+
+    expect(await screen.findByRole("form", { name: "Profile" })).toBeVisible();
+    await expectTitle("Profile · Caravan");
+  });
+
   it("keeps the address when the session ends, so signing in returns there", async () => {
     vi.mocked(getMe).mockResolvedValue(ADA);
     vi.mocked(getGroup).mockRejectedValueOnce(new SignedOutError(401));

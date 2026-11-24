@@ -39,6 +39,9 @@ function SessionMenu({ member, onSignedOut }: { member: Member; onSignedOut: () 
         Signed in as <strong>{member.display_name}</strong>
         <span className="app-header__user-id">{userIdLabel(member.user_id)}</span>
       </p>
+      <Link to="/profile" className="app-header__profile">
+        Profile
+      </Link>
       <Button
         variant="ghost"
         busy={busy}
@@ -146,7 +149,15 @@ export function App() {
             }}
           />
         )}
-        {session.status === "signed-in" && <AppRoutes onSignedOut={signedOut} />}
+        {session.status === "signed-in" && (
+          <AppRoutes
+            member={session.member}
+            onSignedOut={signedOut}
+            onProfileSaved={(member) => {
+              setSession({ status: "signed-in", member });
+            }}
+          />
+        )}
       </main>
     </>
   );

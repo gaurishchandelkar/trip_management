@@ -138,6 +138,11 @@ export function getMe(): Promise<Member> {
   return json("GET", "/api/me");
 }
 
+/** Saves the display name and mobile together. The user ID can't change. */
+export function updateProfile(displayName: string, mobile: string): Promise<Member> {
+  return json("POST", "/api/me/profile", { display_name: displayName, mobile });
+}
+
 export type MembershipStatus = "owner" | "member" | "pending" | "none";
 
 export interface Group {

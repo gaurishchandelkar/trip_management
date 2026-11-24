@@ -25,6 +25,27 @@ def start_session(tx: Transaction, user_id: str, now: Clock) -> str:
     return token
 
 
+def update_profile(store: Store, member: Member, display_name: str, mobile: str) -> Member:
+    """Saves the member's display name and mobile together. The user ID stays as it is."""
+    updated = Member(user_id=member.user_id, display_name=display_name, mobile=mobile)
+    with store.transaction() as tx:
+        before = tx.get_member(member.user_id)
+        if before is None:
+            raise UnauthenticatedError
+        tx.update_member(updated)
+    changed = [
+        field
+        for field, old, new in (
+            ("display_name", before.display_name, display_name),
+            ("mobile", before.mobile, mobile),
+        )
+        if old != new
+    ]
+    # Which fields changed, never their values: names and numbers stay out of the logs.
+    logger.info("profile updated user_id=%s fields=%s", member.user_id, ",".join(changed) or "none")
+    return updated
+
+
 def sign_out(store: Store, token: str) -> None:
     with store.transaction() as tx:
         tx.delete_session(hash_token(token))

@@ -144,6 +144,7 @@
   .back-link,
   .group-card__name,
   .person__phone,
+  .app-header__profile,
   .not-found a {
     min-height: var(--touch-target);
   }
@@ -151,6 +152,7 @@
   .skip-link,
   .group-card__name,
   .person__phone,
+  .app-header__profile,
   .not-found a {
     display: inline-flex;
     align-items: center;
@@ -244,6 +246,37 @@
 .home {
   display: grid;
   gap: var(--space-8);
+}
+
+/* Profile */
+
+.profile {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 32rem;
+}
+
+.profile__fixed {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.profile__fixed dt {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.profile__fixed dd {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.app-header__profile {
+  /* A short word: on phones it needs a minimum width too, to stay a 44 px target. */
+  min-width: var(--touch-target);
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .home__section {

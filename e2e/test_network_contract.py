@@ -440,6 +440,31 @@ def test_member_group_detail_has_no_mobile(
             assert "mobile" not in _keys(call.json() if call.body else None), call.url
 
 
+@covers("test_member_changes_their_mobile_number")
+def test_saving_the_profile_posts_once(page: Page, traffic: ApiTraffic) -> None:
+    user_id = unique_user_id("ada")
+    register_and_sign_in(page, user_id, "Ada")
+    before = len(traffic.api_calls())
+
+    page.get_by_role("link", name="Profile").click()
+    profile = form(page, "Profile")
+    expect(profile).to_be_visible()
+    profile.get_by_label("Display name").fill("Augusta")
+    profile.get_by_label("Mobile number").fill("+44 7700 900999")
+    with page.expect_response(api("POST", "/api/me/profile")):
+        profile.get_by_role("button", name="Save").dblclick()
+    expect(profile.get_by_role("status")).to_be_visible()
+
+    # Opening Profile needs no call: it shows the session's member. Saving is one POST.
+    calls = traffic.api_calls()[before:]
+    assert routes(calls) == [("POST", "/api/me/profile")], traffic.describe()
+    assert calls[0].request_json() == {"display_name": "Augusta", "mobile": "+44 7700 900999"}
+    assert (calls[0].status, calls[0].json()) == (
+        200,
+        {"user_id": user_id, "display_name": "Augusta", "mobile": "+447700900999"},
+    )
+
+
 @covers("test_taken_user_id_says_so_and_keeps_the_input")
 def test_taken_user_id_gets_one_generic_409(
     page: Page, other_page: Page, traffic: ApiTraffic

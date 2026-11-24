@@ -88,6 +88,13 @@ class CompleteRegistration(RequestBody):
     mobile: Mobile
 
 
+class ProfileUpdate(RequestBody):
+    """Both fields every time. A user_id in the body is an unknown field, so a 422."""
+
+    display_name: DisplayName
+    mobile: Mobile
+
+
 class MemberResponse(BaseModel):
     """The signed-in member, about themselves. Only they ever see their own mobile here."""
 

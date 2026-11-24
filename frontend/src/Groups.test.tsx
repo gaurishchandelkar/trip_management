@@ -61,10 +61,12 @@ beforeEach(() => {
   vi.mocked(browseGroups).mockResolvedValue([]);
 });
 
+const ME = { user_id: "ada", display_name: "Ada", mobile: "+919876543210" };
+
 function renderRoutes(path = "/") {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <AppRoutes onSignedOut={onSignedOut} />
+      <AppRoutes member={ME} onSignedOut={onSignedOut} onProfileSaved={vi.fn()} />
     </MemoryRouter>,
   );
 }

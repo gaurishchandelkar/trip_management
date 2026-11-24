@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -61,6 +62,42 @@ def test_sign_out_ends_the_session(store: Store) -> None:
 
     with pytest.raises(UnauthenticatedError):
         members.current_member(store, token)
+
+
+def test_update_profile_changes_name_and_mobile_only(store: Store) -> None:
+    updated = members.update_profile(store, ADA, "Augusta", "+447700900123")
+
+    assert updated == Member(user_id="ada", display_name="Augusta", mobile="+447700900123")
+    with store.transaction() as tx:
+        assert tx.get_member("ada") == updated
+
+
+def test_update_profile_for_a_member_who_is_gone_is_refused(store: Store) -> None:
+    ghost = Member(user_id="ghost", display_name="Ghost", mobile="+447700900123")
+
+    with pytest.raises(UnauthenticatedError):
+        members.update_profile(store, ghost, "Ghost", "+447700900123")
+
+
+@pytest.mark.parametrize(
+    ("name", "mobile", "fields"),
+    [
+        ("Augusta", "+447700900123", "display_name,mobile"),
+        ("Ada Lovelace", "+447700900123", "mobile"),
+        ("Augusta", "+919876543210", "display_name"),
+        ("Ada Lovelace", "+919876543210", "none"),
+    ],
+)
+def test_profile_update_logs_fields_not_values(
+    store: Store, caplog: pytest.LogCaptureFixture, name: str, mobile: str, fields: str
+) -> None:
+    with caplog.at_level(logging.INFO, logger="backend.services.members"):
+        members.update_profile(store, ADA, name, mobile)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages == [f"profile updated user_id=ada fields={fields}"]
+    for value in ("Augusta", "Lovelace", "+447700900123", "+919876543210", "9876543210"):
+        assert value not in messages[0]
 
 
 def test_utc_now_is_timezone_aware() -> None:

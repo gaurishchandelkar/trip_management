@@ -20,11 +20,12 @@ test("changesUi is true only for frontend code or the screenshot captures", () =
   assert.equal(changesUi(["README.md", "e2e/test_journeys.py", "frontendish.md", ""]), false);
 });
 
-test("screenshotAttachments attaches the 20 e2e captures in screen order, with alt text", () => {
+test("screenshotAttachments attaches the 24 e2e captures in screen order, with alt text", () => {
   const { args, error } = screenshotAttachments(DIR, captured(2000).reverse(), 1000);
 
   assert.equal(error, undefined);
-  assert.equal(args.length, 40);
+  assert.equal(args.length, 48);
+  assert.ok(args.includes(`${DIR}/profile-dark-360.png#profile, dark, 360 px`));
   assert.deepEqual(args.slice(0, 4), [
     "--attach",
     `${DIR}/sign-in-light-360.png#sign in, light, 360 px`,
@@ -39,8 +40,8 @@ test("screenshotAttachments refuses a partial, padded or stale set", () => {
   const padded = [...captured(2000), { name: "trace.zip", mtimeMs: 2000 }];
   const stale = captured(2000).map((file, i) => (i === 3 ? { ...file, mtimeMs: 500 } : file));
 
-  assert.match(screenshotAttachments(DIR, partial, 1000).error ?? "", /exactly the 20 captures/);
-  assert.match(screenshotAttachments(DIR, padded, 1000).error ?? "", /exactly the 20 captures/);
+  assert.match(screenshotAttachments(DIR, partial, 1000).error ?? "", /exactly the 24 captures/);
+  assert.match(screenshotAttachments(DIR, padded, 1000).error ?? "", /exactly the 24 captures/);
   assert.match(screenshotAttachments(DIR, [], 1000).error ?? "", /npm run check -- functional/);
   assert.match(screenshotAttachments(DIR, stale, 1000).error ?? "", /older than this branch's/);
 });

@@ -17,7 +17,7 @@ Prepare `feat/$ARGUMENTS` for review.
    - Link the spec and plan, and copy their **Human attention needed** items.
    - Paste the final `npm run check` stage summary as evidence.
    - Fill in the agent metrics: phases, commits, and fix-up commits after a failed check.
-5. If the change touches `frontend/` or `e2e/test_screenshots.py`, the PR shows the 20 e2e captures from `test-results/screenshots/`, not screenshots you take by hand. Make sure they're fresh: if you committed UI fixes after step 1, or ran a pytest stage since (pytest-playwright empties `test-results/`), run `npm run check -- functional` again. Don't put a placeholder for them in the body: `npm run pr` attaches them below it.
+5. If the change touches `frontend/` or `e2e/test_screenshots.py`, the PR shows the 24 e2e captures from `test-results/screenshots/`, not screenshots you take by hand. Make sure they're fresh: if you committed UI fixes after step 1, or ran a pytest stage since (pytest-playwright empties `test-results/`), run `npm run check -- functional` again. Don't put a placeholder for them in the body: `npm run pr` attaches them below it.
 
 ## Hand over
 

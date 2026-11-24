@@ -248,6 +248,32 @@ def test_owner_sees_the_requesters_user_id_and_phone(page: Page, other_page: Pag
     expect(bob.get_by_text(f"Owner: Ada (@{ada_id}).")).to_be_visible()
 
 
+def test_member_changes_their_mobile_number(page: Page, other_page: Page) -> None:
+    ada, bob = page, other_page
+    name = unique_group_name("Goa")
+    bob_id = unique_user_id("bob")
+    register_and_sign_in(ada, unique_user_id("ada"), "Ada")
+    create_group(ada, name)
+    register_and_sign_in(bob, bob_id, "Bob")
+    search_groups(bob, name)
+    with bob.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(bob, "Browse groups").get_by_role("button", name=f"Request to join {name}").click()
+
+    bob.get_by_role("link", name="Profile").click()
+    profile = form(bob, "Profile")
+    expect(profile.get_by_text(f"@{bob_id}")).to_be_visible()
+    expect(profile.get_by_label("Mobile number")).to_have_value("+919876543210")
+    profile.get_by_label("Mobile number").fill("+44 7700 900999")
+    with bob.expect_response(api("POST", "/api/me/profile")):
+        profile.get_by_role("button", name="Save").click()
+    expect(profile.get_by_role("status")).to_have_text("Profile saved.")
+    expect(profile.get_by_label("Mobile number")).to_have_value("+447700900999")
+
+    open_group(ada, "My groups", name)
+    phone = section(ada, "Pending requests").get_by_role("link", name=re.compile("^Call Bob"))
+    expect(phone).to_have_attribute("href", "tel:+447700900999")
+
+
 def test_owner_rejects_a_request_made_by_name(page: Page, other_page: Page) -> None:
     ada, carol = page, other_page
     name = unique_group_name("Ladakh")
