@@ -159,7 +159,7 @@ Success criteria:
 - [x] Integration tests, `return_to`: `/groups/7` is kept; `https://evil.example`, `//evil.example`, `/\evil` and a 201-character path each become `/`. *Also a tab inside the path (browsers drop it, turning `/<tab>/host` into `//host`), `javascript:`, a relative path and an empty value.*
 - [x] Integration tests, registration:
   - a taken user ID → `409 User ID already taken`, and the pending registration still works afterwards;
-  - bad user IDs, display names and mobiles (`09876543210`, `+0123456789`, `+91abc`, 7 and 16 digits, a 21-character raw input), a missing field, an unknown field → `422 {"detail": "Invalid request"}`, and the body doesn't contain the input;
+  - bad user IDs, display names and mobiles (`09876543210`, `+0123456789`, `+91abc`, 7 and 16 digits, a raw input over 20 characters that would be valid without its spaces), a missing field, an unknown field → `422 {"detail": "Invalid request"}`, and the body doesn't contain the input;
   - `+91 98765-43210` is stored as `+919876543210`;
   - two members with the same mobile → both `201`;
   - no, an expired or a used pending registration → `401 Not signed in`;
@@ -315,11 +315,49 @@ Approved by the repo owner in conversation on 2026-11-24 (option 2), after they 
 - [x] Negative proof: always passing `--env-file` fails only `passes no env file when there isn't one`; reverted.
 - [x] The human runs `npm run dev` with their `.env` and sees **Continue with Google** (agents never open `.env`). *Confirmed by the repo owner on 2026-11-24.*
 
+## Follow-up: review findings
+
+`code-reviewer` and `security-reviewer` ran on 2026-11-24. Both said "changes required" for one shared finding, and the security review found nothing at high or critical. The repo owner asked for the findings to be fixed.
+
+Fixed:
+- **Callback `code` and `state` in uvicorn's access log** (blocking / medium). `backend/api/access_log.py` filters the `uvicorn.access` logger so `/api/auth/` paths are logged without their query; `create_app` installs it once. *Negative proof:* without the filter, the real backend log in E2E held the callback's code and `test_sign_up_follows_the_redirects_once` failed; with a prefix that matches nothing, the two redaction unit tests failed.
+- **Loose claim checks** (security low 4). A `nonce` must be a string (joserfc accepted a list containing it), and a token for several audiences must have `azp` equal to our client ID. An HS256 token signed with the RSA public key is now a regression case; joserfc already rejected it. *Negative proof:* with both checks off, the three new rejection cases failed.
+- **One account filling the pending-registration table** (security low 3). Each Google account keeps its newest `MAX_PENDING_PER_ACCOUNT` (3) pending registrations. The reviewer suggested one per account with a unique constraint, but that broke the spec's "a second tab finished first → `409 Account already linked`" criterion, because the first tab's registration was replaced (`401`). Three keeps that criterion and bounds one account to three rows. *Negative proof:* with the cap lifted, both cap tests failed.
+- **Services could import the adapter** (code should-fix 5 / security low 6). A new import contract, "Only main wires in the identity adapter", forbids `api`, `services`, `storage` and `domain` from importing `backend.identity`. *Negative proof:* importing `backend.identity.oidc` in `backend/services/identity_port.py` broke it while the old "only identity talks to the provider" contract stayed green, which was the gap; reverted.
+- **httpx2 outside the adapter** (code should-fix 4). `backend/identity/config.py::google_provider` builds the provider and its HTTP client only when Google is configured, and `OidcProvider.close()` closes it. `main.py` no longer imports httpx2.
+- **`Any` in the adapter** (code should-fix 2). `Json` is `dict[str, object]`, and the JWKS body is cast to joserfc's `KeySetSerialization`.
+- **Rejected tokens weren't logged at WARNING** (code should-fix 3). They now log `identity token rejected provider=… check=…`, never the token.
+- **Untested 20-character raw mobile limit** (code should-fix 6). There's now a backend case over 20 characters that's valid without its spaces, a 20-character accepted case, and `frontend/src/validation.test.ts`.
+- **The old-number test checked one row** (code should-fix 7). Bob now gets a number nobody else has, and every stored value is scanned for it.
+- **An inside E2E loop that checked nothing** (code should-fix 8). It's removed; the real check, on the member's group detail, stays.
+- **No inside E2E test for the owner's view** (code should-fix 9). `test_owner_group_detail_carries_mobiles` pins the owner's call and the `mobile` values.
+- **Nits:**
+  - `outcome=registered` in the registration log;
+  - one `DISPLAY_NAME_MAX_LENGTH` in `backend/domain/models.py`;
+  - an explicit assertion in `test_expired_sign_ins_make_room_for_new_ones`;
+  - the nonce in the private list of `test_logs_carry_only_the_user_id`;
+  - a test for nonce and challenge freshness;
+  - coverage-table corrections.
+- **The fake Google** refuses every client when its secret is unset (security informational).
+
+Deviations recorded now (code nit 11, 13):
+- The token request sends the client secret in the form body (`client_secret_post`), not Basic auth. Google accepts both.
+- Pending registrations are used with a select then delete under `BEGIN IMMEDIATE`, not `DELETE … RETURNING`. It's equally single-use, because the write lock serializes the two steps.
+- After a server `422`, Profile shows the combined hint without marking a field, because the server's fixed body can't say which field failed. The frontend's own checks, which run first, do mark the field.
+
+Left for the repo owner to decide, because each changes behaviour the spec states:
+- **Security low 2:** anyone who can reach the app can fill the 1,000 open sign-ins and block sign-in for 10 minutes. The fix is to evict the oldest flows instead of refusing.
+- **Security low 5:** set `Secure` on the cookies when `TRIP_PUBLIC_URL` is `https`.
+- **Informational:** httpx2's 5-second timeout applies per phase, not to the whole request, and expired sessions are deleted only when presented (as on `main`).
+- **Human-owned:** `.env.example` has an indented comment line and no final newline.
+
+- [x] `code-reviewer` and `security-reviewer` findings fixed, apart from the three items left for the repo owner above.
+
 ## Final verification
 
 - [x] `npm run check` passes *All 7 stages, with this plan at Done: 157 backend unit (90% coverage), 263 vitest, 173 integration, 73 E2E, 24 screenshots.*
 - [x] Every acceptance criterion in the spec is covered by a test (table below)
-- [ ] `code-reviewer` and `security-reviewer` run before `/ship` (left for `/ship`)
+- [x] `code-reviewer` and `security-reviewer` run before `/ship` *Run on 2026-11-24; findings and fixes under "Follow-up: review findings".*
 - [x] The human signs in once with a real Google account on `localhost` (manual, spec Definition of Done) *Confirmed by the repo owner on 2026-11-24, with the credentials loaded from `.env`.*
 
 ### Spec coverage
@@ -329,29 +367,28 @@ Approved by the repo owner in conversation on 2026-11-24 (option 2), after they 
 | Configured, no session: Continue with Google, no user-ID or password fields | `frontend/src/SignedOut.test.tsx::shows Continue with Google and no user ID or password fields`, `e2e/test_journeys.py::test_signed_out_screen_offers_only_google` |
 | Not configured: not-set-up message, start returns 404 | `frontend/src/SignedOut.test.tsx::says sign-in isn't set up when no provider is configured`, `backend/tests/integration/test_auth.py::test_unconfigured_provider_routes_are_not_found` |
 | Retired endpoints create no member or session | `backend/tests/integration/test_auth.py::test_retired_routes_create_nothing` |
-| Start redirects to Google with every parameter and sets the flow cookie | `backend/tests/integration/test_auth.py::test_start_redirects_with_pkce_state_and_nonce`, `backend/tests/unit/test_identity.py::test_authorization_url_has_every_parameter`, `e2e/test_network_contract.py::test_sign_up_follows_the_redirects_once` |
+| Start redirects to Google with every parameter and sets the flow cookie | `backend/tests/integration/test_auth.py::test_start_redirects_with_pkce_state_and_nonce`, `backend/tests/integration/test_auth.py::test_each_start_sends_a_fresh_state`, `backend/tests/unit/test_auth_service.py::test_each_start_sends_a_fresh_nonce_and_challenge`, `backend/tests/unit/test_identity.py::test_authorization_url_has_every_parameter`, `e2e/test_network_contract.py::test_sign_up_follows_the_redirects_once` |
 | `return_to` kept for `/groups/7`, ignored when not an app path | `backend/tests/integration/test_auth.py::test_return_to_keeps_an_app_path`, `backend/tests/integration/test_auth.py::test_return_to_ignores_anything_else`, `e2e/test_journeys.py::test_signed_out_visitor_lands_on_the_group_after_signing_in` |
 | Linked subject: code exchanged with verifier, session started, flow cookie cleared, redirect to `return_to` | `backend/tests/integration/test_auth.py::test_callback_signs_in_a_linked_member`, `backend/tests/unit/test_identity.py::test_token_request_sends_the_code_verifier` |
 | After the redirect, `/api/me` returns the member and the banner shows name and @id | `e2e/test_journeys.py::test_returning_member_signs_in_with_google`, `frontend/src/App.test.tsx::shows the display name with the user ID beneath` |
-| Bad signature, `iss`, `aud`, `exp` or `nonce` → no session, `/?sign_in=failed` | `backend/tests/unit/test_identity.py::test_rejects_tokens_that_fail_any_check`, `backend/tests/integration/test_auth.py::test_rejected_identity_redirects_to_failed` |
+| Bad signature, `iss`, `aud`, `exp` or `nonce` → no session, `/?sign_in=failed` | `backend/tests/unit/test_identity.py::test_rejects_tokens_that_fail_any_check`, `backend/tests/unit/test_identity.py::test_several_audiences_are_accepted_when_issued_to_us`, `backend/tests/integration/test_auth.py::test_rejected_identity_redirects_to_failed` |
 | Missing, unknown, reused, expired state or no flow cookie → failed, no code exchanged | `backend/tests/integration/test_auth.py::test_bad_state_never_exchanges_the_code`, `e2e/test_journeys.py::test_replayed_callback_in_another_browser_fails` |
 | Cancel at Google → `/?sign_in=cancelled` and message | `backend/tests/integration/test_auth.py::test_access_denied_redirects_to_cancelled`, `e2e/test_journeys.py::test_cancelling_at_google_says_so` |
 | `/?sign_in=failed` shows the message and the query is removed | `frontend/src/SignedOut.test.tsx::shows the %s message and removes the query` |
 | New subject: no member or session yet, redirect to `/register/complete`, pending cookie | `backend/tests/integration/test_auth.py::test_callback_for_a_new_subject_starts_a_pending_registration` |
-| Finish registering form: three fields, name prefilled only when valid | `frontend/src/FinishRegistration.test.tsx::prefills a valid Google name and leaves an invalid one empty`, `backend/tests/integration/test_auth.py::test_pending_registration_suggests_only_a_valid_name` |
+| Finish registering form: three fields, name prefilled only when valid | `frontend/src/FinishRegistration.test.tsx::shows three labelled fields, each with its rule`, `frontend/src/FinishRegistration.test.tsx::prefills a valid Google name and leaves an invalid one empty`, `backend/tests/integration/test_auth.py::test_pending_registration_suggests_only_a_valid_name` |
 | Valid submit creates a linked member and session, returns 201, lands on `return_to` | `backend/tests/integration/test_auth.py::test_completing_registration_creates_a_linked_member`, `e2e/test_journeys.py::test_new_person_signs_up_with_google`, `e2e/test_network_contract.py::test_sign_up_follows_the_redirects_once` |
 | Taken user ID → 409, input kept, pending still usable | `backend/tests/integration/test_auth.py::test_taken_user_id_keeps_the_pending_registration`, `e2e/test_journeys.py::test_taken_user_id_says_so_and_keeps_the_input` |
 | Invalid user ID, name or mobile → 422, field marked | `backend/tests/integration/test_auth.py::test_invalid_registration_is_refused`, `frontend/src/FinishRegistration.test.tsx::marks the %s field and sends nothing` |
 | No, expired or used pending registration → 401 and the expired message | `backend/tests/integration/test_auth.py::test_missing_or_used_pending_registration_is_401`, `frontend/src/FinishRegistration.test.tsx::returns to sign-in with the expired message on 401` |
 | Subject linked meanwhile → 409 Account already linked, no second member | `backend/tests/integration/test_auth.py::test_subject_linked_meanwhile_is_409`, `backend/tests/integration/test_auth.py::test_concurrent_registrations_create_one_member` |
 | Mobile with spaces or hyphens is stored without them | `backend/tests/integration/test_auth.py::test_mobile_is_stored_without_spaces_or_hyphens` |
-| Badly formed mobile → 422 and the hint | `backend/tests/integration/test_auth.py::test_invalid_mobile_is_refused`, `frontend/src/FinishRegistration.test.tsx::shows the mobile hint for %s` |
+| Badly formed mobile → 422 and the hint | `backend/tests/integration/test_auth.py::test_invalid_mobile_is_refused`, `frontend/src/FinishRegistration.test.tsx::shows the mobile hint for %s`, `frontend/src/validation.test.ts::refuses more than 20 characters as typed` |
 | Same mobile for two members is allowed | `backend/tests/integration/test_auth.py::test_two_members_may_share_a_mobile` |
-| Owner sees members' and requesters' mobiles as `tel:` links | `backend/tests/integration/test_groups.py::test_owner_sees_mobiles_of_members_and_requesters`, `frontend/src/Groups.test.tsx::the owner sees phone links for members and requests`, `e2e/test_journeys.py::test_owner_sees_the_requesters_user_id_and_phone` |
+| Owner sees members' and requesters' mobiles as `tel:` links | `backend/tests/integration/test_groups.py::test_owner_sees_mobiles_of_members_and_requesters`, `frontend/src/Groups.test.tsx::the owner sees phone links for members and requests`, `e2e/test_journeys.py::test_owner_sees_the_requesters_user_id_and_phone`, `e2e/test_network_contract.py::test_owner_group_detail_carries_mobiles` |
 | Non-owner member sees no mobiles and no `mobile` field | `backend/tests/integration/test_groups.py::test_members_never_receive_a_mobile`, `frontend/src/Groups.test.tsx::a member sees no phone links`, `e2e/test_network_contract.py::test_member_group_detail_has_no_mobile` |
 | Browse, my-groups and join-request responses contain no mobile | `backend/tests/integration/test_groups.py::test_lists_and_requests_never_contain_a_mobile` |
-| The member sees their own user ID, name and mobile on their profile | `frontend/src/Profile.test.tsx::shows the user ID as text and fills the current values` |
-| Profile link opens `/profile` with title, back link, read-only user ID, filled fields, note | `frontend/src/Profile.test.tsx::shows the user ID as text and fills the current values`, `frontend/src/App.test.tsx::the Profile link opens the profile screen`, `e2e/test_journeys.py::test_member_changes_their_mobile_number` |
+| Profile link opens `/profile` with title, back link, read-only user ID, filled fields, note (so the member sees their own user ID, name and mobile) | `frontend/src/Profile.test.tsx::shows the user ID as text and fills the current values`, `frontend/src/App.test.tsx::the Profile link opens the profile screen`, `e2e/test_journeys.py::test_member_changes_their_mobile_number` |
 | Saving a new mobile sends the POST, returns the normalized number, shows Profile saved | `backend/tests/integration/test_profile.py::test_changing_the_mobile_returns_it_normalized`, `frontend/src/Profile.test.tsx::shows Profile saved and updates the banner`, `e2e/test_network_contract.py::test_saving_the_profile_posts_once` |
 | Owner sees the new number next time; the old one isn't stored | `backend/tests/integration/test_profile.py::test_owner_sees_the_new_mobile_and_the_old_one_is_gone`, `e2e/test_journeys.py::test_member_changes_their_mobile_number` |
 | Changed display name shows everywhere; user ID, groups, requests and session unchanged | `backend/tests/integration/test_profile.py::test_changing_the_name_keeps_everything_else` |
@@ -367,5 +404,5 @@ Approved by the repo owner in conversation on 2026-11-24 (option 2), after they 
 | API shapes: members, pending requests, `owner_user_id` | `backend/tests/integration/test_groups.py::test_people_carry_their_user_id`, `backend/tests/integration/test_groups.py::test_groups_carry_the_owner_user_id` |
 | Same email, different subjects → two members | `backend/tests/integration/test_auth.py::test_same_email_different_subjects_are_two_members` |
 | Database holds separate columns and only provider and subject for the link | `backend/tests/integration/test_auth.py::test_stores_no_email_name_or_tokens` |
-| Logs carry the user ID only, never personal data or flow secrets | `backend/tests/unit/test_auth_service.py::test_logs_carry_only_the_user_id`, `backend/tests/unit/test_identity.py::test_never_logs_tokens_or_codes`, `backend/tests/unit/test_members_service.py::test_profile_update_logs_fields_not_values` |
+| Logs carry the user ID only, never personal data or flow secrets | `backend/tests/unit/test_auth_service.py::test_logs_carry_only_the_user_id`, `backend/tests/unit/test_identity.py::test_never_logs_tokens_or_codes`, `backend/tests/unit/test_identity.py::test_a_rejected_token_is_logged_at_warning_without_its_contents`, `backend/tests/unit/test_members_service.py::test_profile_update_logs_fields_not_values`, `backend/tests/unit/test_access_log.py::test_the_callback_is_logged_without_its_code_or_state`, `backend/tests/unit/test_access_log.py::test_create_app_redacts_the_access_log`, `e2e/test_network_contract.py::test_sign_up_follows_the_redirects_once` (reads the real backend log) |
 | Sign-out ends the session and shows Continue with Google | `e2e/test_journeys.py::test_sign_out_returns_to_sign_in`, `e2e/test_network_contract.py::test_sign_out_sends_one_request` |

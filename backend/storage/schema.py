@@ -54,6 +54,8 @@ pending_registrations = Table(
     Column("suggested_name", String(50), nullable=False),
     Column("return_to", String(200), nullable=False),
     Column("expires_at", Integer, nullable=False, index=True),
+    # Looked up per provider account, to keep each account to a few (MAX_PENDING_PER_ACCOUNT).
+    Index("pending_registrations_by_account", "provider", "subject"),
 )
 
 sessions = Table(

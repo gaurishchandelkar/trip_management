@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, select
 from backend.domain.errors import DomainError, IdentityRejectedError, ProviderUnavailableError
 from backend.domain.models import (
     MAX_OPEN_SIGN_INS,
+    MAX_PENDING_PER_ACCOUNT,
     MAX_PENDING_REGISTRATIONS,
     PendingRegistration,
     SignInFlow,
@@ -108,7 +109,9 @@ def test_expired_sign_ins_make_room_for_new_ones(
         for n in range(MAX_OPEN_SIGN_INS):
             tx.add_sign_in_flow(SignInFlow(f"f{n}", "google", "s", "n", "v", "/", clock.now))
 
-    start(client)
+    response = client.get(START, follow_redirects=False)
+
+    assert response.headers["location"].startswith(f"{AUTHORIZE_URL}?")
 
 
 # return_to
@@ -315,6 +318,22 @@ def test_callback_for_a_new_subject_starts_a_pending_registration(
         assert db.execute("SELECT COUNT(*) FROM sessions").fetchone() == (0,)
 
 
+def test_one_account_holds_a_few_pending_registrations(
+    app: FastAPI,
+    client: TestClient,
+    provider: FakeIdentityProvider,
+    db_path: Path,
+    clock: FakeClock,
+) -> None:
+    for tab in (client, *(TestClient(app) for _ in range(MAX_PENDING_PER_ACCOUNT + 2))):
+        clock.advance(timedelta(seconds=1))
+        registered(tab, provider, subject="s-same")
+
+    with sqlite3.connect(db_path) as db:
+        rows = db.execute("SELECT subject FROM pending_registrations").fetchall()
+    assert rows == [("s-same",)] * MAX_PENDING_PER_ACCOUNT
+
+
 def test_pending_registration_cap_fails_new_registrations(
     client: TestClient, provider: FakeIdentityProvider, db_path: Path, clock: FakeClock
 ) -> None:
@@ -322,7 +341,7 @@ def test_pending_registration_cap_fails_new_registrations(
         later = clock.now + timedelta(minutes=5)
         for n in range(MAX_PENDING_REGISTRATIONS):
             tx.add_pending_registration(
-                PendingRegistration(f"t{n}", "google", f"s{n}", "", "/", later)
+                PendingRegistration(f"t{n}", "google", f"s{n}", "", "/", later), keep=1
             )
     state = start(client)
 
@@ -420,6 +439,8 @@ def test_invalid_registration_is_refused(
         "+1234567",
         "+1234567890123456",
         "+91 98765 43210 0000",
+        # 23 characters as typed, though a valid number once spaces go: the raw limit is 20.
+        "+91 9 8 7 6 5 4 3 2 1 0",
         "+91.9876543210",
         "+91 (987) 6543210",
         "",
@@ -443,6 +464,8 @@ def test_invalid_mobile_is_refused(
         ("+44 7700 900123", "+447700900123"),
         ("+12345678", "+12345678"),
         ("+123456789012345", "+123456789012345"),
+        # Exactly 20 characters as typed: the longest raw input allowed.
+        ("+1 2 3 4 5 6 7 8 9 0", "+1234567890"),
     ],
 )
 def test_mobile_is_stored_without_spaces_or_hyphens(

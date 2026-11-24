@@ -130,7 +130,7 @@ The Name is what people read; `@user-id` sits beside it, smaller, so two people 
 - **Old database** (a `trip.db` from before this change, without the `mobile` column or the new tables) → startup stops with a clear message telling the human to delete `trip.db`, rather than answering every request with `503`.
 - **Replay and race:** a `state` and a pending registration can each be used once. A second callback with the same `state` fails; a double-submitted **Finish registering** creates one member, and the second submit gets `401` or `409`.
 - **Time limits:** flows and pending registrations expire after 10 minutes. Expired records are deleted when the next flow starts.
-- **Size limits:** at most 1,000 unexpired flow records and 1,000 pending registrations in total. Starting a flow past that redirects to `/?sign_in=failed`, so the tables can't grow without bound.
+- **Size limits:** at most 1,000 unexpired flow records and 1,000 pending registrations in total. Starting a flow past that redirects to `/?sign_in=failed`, so the tables can't grow without bound. One Google account keeps at most its 3 newest pending registrations (added after the security review, so one account can't fill the table; a second tab still works).
 - **Profile edits:** invalid input, unknown fields or a body over 4 KB → `422` or `413` and nothing changes. Two tabs saving at once → each save is one transaction and the last one wins; neither leaves a half-updated profile. The profile is saved as a whole: both fields are required in every save.
 - **Storage unavailable** → `503 {"detail": "Service unavailable"}` on JSON endpoints, or a redirect to `/?sign_in=failed` on start and callback; nothing half-written (each step is one transaction).
 

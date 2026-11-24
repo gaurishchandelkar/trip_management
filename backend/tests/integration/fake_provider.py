@@ -36,6 +36,12 @@ class FakeIdentityProvider:
         self._authorizations[state] = (nonce, code_challenge)
         return f"{AUTHORIZE_URL}?{urlencode({'state': state})}"
 
+    def nonce_for(self, state: str) -> str:
+        return self._authorizations[state][0]
+
+    def challenge_for(self, state: str) -> str:
+        return self._authorizations[state][1]
+
     def approve(self, state: str, subject: str, name: str | None = "Ada Lovelace") -> str:
         """What the provider does when the person consents: a code for this identity."""
         nonce, challenge = self._authorizations[state]

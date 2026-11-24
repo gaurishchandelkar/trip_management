@@ -161,8 +161,11 @@ def decide(
 @app.post("/token", response_model=None)
 async def token(request: Request) -> dict[str, object] | JSONResponse:
     form = {key: values[0] for key, values in parse_qs((await request.body()).decode()).items()}
-    client_ok = form.get("client_id") == CLIENT_ID and hmac.compare_digest(
-        form.get("client_secret", ""), CLIENT_SECRET
+    # An unset secret never matches, so a misconfigured fake can't accept any client.
+    client_ok = (
+        bool(CLIENT_SECRET)
+        and form.get("client_id") == CLIENT_ID
+        and hmac.compare_digest(form.get("client_secret", ""), CLIENT_SECRET)
     )
     if not client_ok:
         return _bad_request("invalid_client")

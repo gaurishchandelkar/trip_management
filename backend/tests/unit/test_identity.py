@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx2
 import pytest
 from joserfc import jwt
-from joserfc.jwk import RSAKey
+from joserfc.jwk import OctKey, RSAKey
 
 from backend.domain.errors import IdentityRejectedError, ProviderUnavailableError
 from backend.domain.models import Identity
@@ -54,6 +54,12 @@ def claims(**overrides: Any) -> dict[str, Any]:
 
 def sign(payload: dict[str, Any], key: RSAKey = KEY) -> str:
     return jwt.encode({"alg": "RS256", "kid": key.kid}, payload, key)
+
+
+def hs256_with_public_key(payload: dict[str, Any]) -> str:
+    """Algorithm confusion: the RSA public key used as an HMAC secret."""
+    secret = OctKey.import_key(json.dumps(KEY.as_dict(private=False)).encode())
+    return jwt.encode({"alg": "HS256", "kid": KEY.kid}, payload, secret)
 
 
 def unsigned(payload: dict[str, Any]) -> str:
@@ -218,12 +224,41 @@ def test_token_request_sends_the_code_verifier() -> None:
         pytest.param(sign(claims(sub="")), id="empty subject"),
         pytest.param(sign(claims(sub="s" * 256)), id="subject too long"),
         pytest.param(unsigned(claims()), id="alg none"),
+        pytest.param(hs256_with_public_key(claims()), id="HS256 with the public key"),
+        pytest.param(sign(claims(nonce=[NONCE])), id="nonce as a list"),
+        pytest.param(sign(claims(aud=["client-1", "other"])), id="several audiences, no azp"),
+        pytest.param(
+            sign(claims(aud=["client-1", "other"], azp="other")),
+            id="several audiences, azp is another client",
+        ),
         pytest.param("not-a-token", id="garbage"),
     ],
 )
 def test_rejects_tokens_that_fail_any_check(id_token: str) -> None:
     with pytest.raises(IdentityRejectedError):
         provider(FakeIdp(id_token=id_token)).verified_identity(CODE, VERIFIER, NONCE)
+
+
+def test_several_audiences_are_accepted_when_issued_to_us() -> None:
+    token = sign(claims(aud=["client-1", "other"], azp="client-1"))
+
+    identity = provider(FakeIdp(id_token=token)).verified_identity(CODE, VERIFIER, NONCE)
+
+    assert identity.subject == "subject-1"
+
+
+def test_a_rejected_token_is_logged_at_warning_without_its_contents(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    token = sign(claims(iss="https://evil.example"))
+
+    with caplog.at_level(logging.DEBUG), pytest.raises(IdentityRejectedError):
+        provider(FakeIdp(id_token=token)).verified_identity(CODE, VERIFIER, NONCE)
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings == ["identity token rejected provider=google check=token"]
+    for value in (token, CODE, VERIFIER, NONCE, "subject-1", "evil.example"):
+        assert value not in "\n".join(r.getMessage() for r in caplog.records)
 
 
 def _timeout() -> httpx2.Response:

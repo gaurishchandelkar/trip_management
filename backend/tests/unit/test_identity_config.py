@@ -2,8 +2,8 @@ import logging
 
 import pytest
 
-from backend.identity.config import InsecureIssuerError, google_settings
-from backend.identity.oidc import GOOGLE_ISSUER, OidcSettings
+from backend.identity.config import InsecureIssuerError, google_provider, google_settings
+from backend.identity.oidc import GOOGLE_ISSUER, OidcProvider, OidcSettings
 
 ID = "client-id-value"
 CREDENTIAL = "client-credential-value"
@@ -12,6 +12,15 @@ BOTH = {"TRIP_GOOGLE_CLIENT_ID": ID, "TRIP_GOOGLE_CLIENT_SECRET": CREDENTIAL}
 
 def test_no_variables_means_google_is_off() -> None:
     assert google_settings({}) is None
+    assert google_provider({}) is None
+
+
+def test_configured_google_gets_its_own_provider() -> None:
+    provider = google_provider(BOTH)
+
+    assert isinstance(provider, OidcProvider)
+    assert provider.name == "google"
+    provider.close()
 
 
 def test_defaults_to_google_and_the_dev_server() -> None:

@@ -76,6 +76,12 @@ forbidden_modules = ["httpx2", "joserfc"]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
+name = "Only main wires in the identity adapter"
+type = "forbidden"
+source_modules = ["backend.api", "backend.services", "backend.storage", "backend.domain"]
+forbidden_modules = ["backend.identity"]
+
+[[tool.importlinter.contracts]]
 name = "Only storage talks to the database"
 type = "forbidden"
 source_modules = ["backend.api", "backend.services", "backend.domain"]

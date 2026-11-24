@@ -16,6 +16,7 @@ from backend.domain.errors import (
 )
 from backend.domain.models import (
     MAX_OPEN_SIGN_INS,
+    MAX_PENDING_PER_ACCOUNT,
     MAX_PENDING_REGISTRATIONS,
     SIGN_IN_LIFETIME,
     Member,
@@ -155,6 +156,48 @@ def test_a_long_provider_name_is_not_suggested(
     assert auth.pending_registration(store, outcome.registration_token, clock).suggested_name == ""
 
 
+def test_each_start_sends_a_fresh_nonce_and_challenge(
+    store: Store, provider: FakeIdentityProvider, clock: Clock
+) -> None:
+    _, first = begin(store, provider, clock)
+    _, second = begin(store, provider, clock)
+
+    assert provider.nonce_for(first) != provider.nonce_for(second)
+    assert provider.challenge_for(first) != provider.challenge_for(second)
+    assert len(provider.nonce_for(first)) >= 43
+
+
+def test_one_account_keeps_only_its_newest_pending_registrations(
+    store: Store, provider: FakeIdentityProvider, clock: Clock
+) -> None:
+    tokens: list[str] = []
+    for _ in range(MAX_PENDING_PER_ACCOUNT + 2):
+        # A second apart, so "newest" is well defined.
+        clock.now += timedelta(seconds=1)
+        outcome = finish(store, provider, clock, subject="s-new")
+        assert isinstance(outcome, NeedsRegistration)
+        tokens.append(outcome.registration_token)
+
+    with store.transaction() as tx:
+        assert tx.count_pending_registrations() == MAX_PENDING_PER_ACCOUNT
+    for token in tokens[-MAX_PENDING_PER_ACCOUNT:]:
+        auth.pending_registration(store, token, clock)
+    for token in tokens[:-MAX_PENDING_PER_ACCOUNT]:
+        with pytest.raises(UnauthenticatedError):
+            auth.pending_registration(store, token, clock)
+
+
+def test_other_accounts_keep_their_pending_registrations(
+    store: Store, provider: FakeIdentityProvider, clock: Clock
+) -> None:
+    other = finish(store, provider, clock, subject="s-other")
+    for _ in range(MAX_PENDING_PER_ACCOUNT + 1):
+        finish(store, provider, clock, subject="s-new")
+
+    assert isinstance(other, NeedsRegistration)
+    auth.pending_registration(store, other.registration_token, clock)
+
+
 def test_a_flow_is_used_once(store: Store, provider: FakeIdentityProvider, clock: Clock) -> None:
     flow_id, state = begin(store, provider, clock)
     code = provider.approve(state, "s-ada")
@@ -224,7 +267,7 @@ def test_new_subjects_fail_past_the_pending_registration_cap(
     with store.transaction() as tx:
         for n in range(MAX_PENDING_REGISTRATIONS):
             tx.add_pending_registration(
-                PendingRegistration(f"t{n}", "google", f"s{n}", "", "/", later)
+                PendingRegistration(f"t{n}", "google", f"s{n}", "", "/", later), keep=1
             )
 
     assert finish(store, provider, clock) == SignInFailed(Failure.FAILED)
@@ -358,12 +401,13 @@ def test_logs_carry_only_the_user_id(
     messages = [record.getMessage() for record in caplog.records]
     assert messages == [
         "sign-in provider=google outcome=needs_registration",
-        "registered provider=google user_id=ada",
+        "registration provider=google outcome=registered user_id=ada",
         "sign-in provider=google outcome=signed_in user_id=ada",
         "sign-in provider=google outcome=failed",
     ]
     logged = "\n".join(messages)
-    private = [flow_id, state, code, "s-secret-subject", "Augusta", "Lovelace", MOBILE]
+    nonce = provider.nonce_for(state)
+    private = [flow_id, state, nonce, code, "s-secret-subject", "Augusta", "Lovelace", MOBILE]
     private += [outcome.registration_token, signed_in.session_token]
     for value in private:
         assert value not in logged

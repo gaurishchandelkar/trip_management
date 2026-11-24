@@ -2,7 +2,9 @@ import logging
 from collections.abc import Mapping
 from urllib.parse import urlsplit
 
-from backend.identity.oidc import GOOGLE_ISSUER, OidcSettings
+import httpx2
+
+from backend.identity.oidc import GOOGLE_ISSUER, OidcProvider, OidcSettings
 
 # Names of environment variables. The human sets their values; they never enter the repo.
 CLIENT_ID_VAR = "TRIP_GOOGLE_CLIENT_ID"
@@ -19,6 +21,12 @@ logger = logging.getLogger(__name__)
 class InsecureIssuerError(ValueError):
     def __init__(self) -> None:
         super().__init__(f"{ISSUER_VAR} must use https, or http on 127.0.0.1 or localhost.")
+
+
+def google_provider(env: Mapping[str, str]) -> OidcProvider | None:
+    """The Google provider, with its own HTTP client, or None when Google isn't configured."""
+    settings = google_settings(env)
+    return None if settings is None else OidcProvider("google", settings, httpx2.Client())
 
 
 def google_settings(env: Mapping[str, str]) -> OidcSettings | None:

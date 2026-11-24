@@ -6,13 +6,13 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, NoReturn, cast
+from typing import NoReturn, cast
 from urllib.parse import urlencode
 
 import httpx2
 from joserfc import jwt
 from joserfc.errors import InvalidKeyIdError, JoseError
-from joserfc.jwk import KeySet
+from joserfc.jwk import KeySet, KeySetSerialization
 
 from backend.domain.errors import IdentityRejectedError, ProviderUnavailableError
 from backend.domain.models import Identity
@@ -28,7 +28,7 @@ MAX_SUBJECT_LENGTH = 255
 
 logger = logging.getLogger(__name__)
 
-type Json = dict[str, Any]
+type Json = dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,9 @@ class OidcProvider:
         if settings.issuer == GOOGLE_ISSUER:
             self._issuers.append("accounts.google.com")
 
+    def close(self) -> None:
+        self._http.close()
+
     def authorization_url(self, state: str, nonce: str, code_challenge: str) -> str:
         query = urlencode(
             {
@@ -103,7 +106,15 @@ class OidcProvider:
         claims = self._verified_claims(id_token, nonce)
         subject = claims.get("sub")
         if not isinstance(subject, str) or not 0 < len(subject) <= MAX_SUBJECT_LENGTH:
-            raise IdentityRejectedError
+            self._rejected("subject")
+        # joserfc accepts a list that contains the expected nonce; OIDC sends a single string.
+        if not isinstance(claims.get("nonce"), str):
+            self._rejected("nonce")
+        # A token for several audiences must name us as the party it was issued to (OIDC
+        # Core 3.1.3.7), or a token minted for another client could sign someone in here.
+        audience = claims.get("aud")
+        if isinstance(audience, list) and claims.get("azp") != self._settings.client_id:
+            self._rejected("azp")
         name = claims.get("name")
         return Identity(subject=subject, name=name if isinstance(name, str) else None)
 
@@ -121,8 +132,8 @@ class OidcProvider:
         try:
             token = self._decode(id_token)
             registry.validate(token.claims)
-        except JoseError as exc:
-            raise IdentityRejectedError from exc
+        except JoseError:
+            self._rejected("token")
         return token.claims
 
     def _decode(self, id_token: str) -> jwt.Token:
@@ -149,7 +160,7 @@ class OidcProvider:
         if self._keys is None or stale or refresh:
             body = self._json("jwks", "GET", self._discover().jwks)
             try:
-                self._keys = KeySet.import_key_set(cast(Any, body))
+                self._keys = KeySet.import_key_set(cast(KeySetSerialization, body))
             except (JoseError, ValueError, TypeError, KeyError):
                 self._unavailable("jwks")
             self._keys_fetched_at = self._now()
@@ -170,3 +181,8 @@ class OidcProvider:
         # The step and provider only: never a code, token or response body.
         logger.warning("identity provider unavailable provider=%s step=%s", self.name, step)
         raise ProviderUnavailableError
+
+    def _rejected(self, check: str) -> NoReturn:
+        # Which check failed, never the token or its claims.
+        logger.warning("identity token rejected provider=%s check=%s", self.name, check)
+        raise IdentityRejectedError

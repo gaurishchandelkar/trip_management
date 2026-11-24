@@ -13,6 +13,7 @@ from pydantic import (
 )
 
 from backend.domain.models import (
+    DISPLAY_NAME_MAX_LENGTH,
     GroupDetail,
     GroupSummary,
     JoinRequest,
@@ -25,7 +26,7 @@ from backend.domain.models import (
 
 # Letters (any script), optionally joined by single spaces, hyphens or apostrophes.
 NAME_PATTERN = r"^[^\W\d_]+(?:[ '\-][^\W\d_]+)*$"
-NAME_MAX_LENGTH = 50
+NAME_MAX_LENGTH = DISPLAY_NAME_MAX_LENGTH
 USER_ID_PATTERN = r"^[A-Za-z][A-Za-z0-9_-]*$"
 
 # Upper-case is accepted and folded, so "ADA" collides with "ada" instead of failing validation.

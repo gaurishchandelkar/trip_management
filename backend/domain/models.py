@@ -8,11 +8,15 @@ MAX_OWNED_GROUPS = 20
 MAX_PENDING_REQUESTS = 20
 BROWSE_LIMIT = 50
 SESSION_LIFETIME = timedelta(days=7)
+DISPLAY_NAME_MAX_LENGTH = 50
 # A sign-in that leaves for the provider, and a registration waiting for its user ID, each
 # have 10 minutes. At most 1,000 of each are open at once, so the tables can't grow unbounded.
 SIGN_IN_LIFETIME = timedelta(minutes=10)
 MAX_OPEN_SIGN_INS = 1000
 MAX_PENDING_REGISTRATIONS = 1000
+# Signing in again with the same new account keeps its newest few, so a second tab still
+# works but one account can't fill the table on its own.
+MAX_PENDING_PER_ACCOUNT = 3
 
 
 class MembershipStatus(StrEnum):

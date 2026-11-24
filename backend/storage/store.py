@@ -222,7 +222,23 @@ class Transaction:
             expires_at=datetime.fromtimestamp(row.expires_at, UTC),
         )
 
-    def add_pending_registration(self, pending: PendingRegistration) -> None:
+    def add_pending_registration(self, pending: PendingRegistration, keep: int) -> None:
+        """Stores the pending registration, keeping the account's newest `keep` in all."""
+        same_account = (
+            pending_registrations.c.provider == pending.provider,
+            pending_registrations.c.subject == pending.subject,
+        )
+        newest = (
+            select(pending_registrations.c.token_hash)
+            .where(*same_account)
+            .order_by(pending_registrations.c.expires_at.desc())
+            .limit(keep - 1)
+        )
+        self._connection.execute(
+            delete(pending_registrations).where(
+                *same_account, pending_registrations.c.token_hash.not_in(newest)
+            )
+        )
         self._connection.execute(
             insert(pending_registrations).values(
                 token_hash=pending.token_hash,

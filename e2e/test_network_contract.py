@@ -33,10 +33,12 @@ from e2e.app import (
     section,
     sign_in_with_google,
     sign_out,
+    sign_up,
     to_google,
     unique_group_name,
     unique_user_id,
 )
+from e2e.conftest import Server
 from e2e.network import ApiTraffic, Call, Signature, covers, origin
 
 ME: Signature = ("GET", "/api/me", {})
@@ -106,7 +108,9 @@ def test_backend_failure_checks_the_session_once(page: Page, traffic: ApiTraffic
 
 
 @covers("test_new_person_signs_up_with_google", "test_session_survives_a_reload")
-def test_sign_up_follows_the_redirects_once(page: Page, traffic: ApiTraffic) -> None:
+def test_sign_up_follows_the_redirects_once(
+    page: Page, traffic: ApiTraffic, servers: list[Server]
+) -> None:
     user_id = unique_user_id("ada")
     load_signed_out(page)
     to_google(page)
@@ -152,6 +156,12 @@ def test_sign_up_follows_the_redirects_once(page: Page, traffic: ApiTraffic) -> 
     for call in traffic.api_calls():
         assert google_account(user_id) not in f"{call.body} {call.request_body}"
     assert [call.signature for call in traffic.api_calls()[len(calls) :]] == [ME, *HOME]
+    # The backend's own log (uvicorn's access log included) names the callback, but never
+    # its one-time code or state.
+    backend_log = next(s for s in servers if s.name == "backend").log.read_text(errors="replace")
+    assert "/api/auth/google/callback" in backend_log
+    for one_time in (callback.query["code"][0], callback.query["state"][0]):
+        assert one_time not in backend_log
 
 
 @covers("test_returning_member_signs_in_with_google")
@@ -434,10 +444,39 @@ def test_member_group_detail_has_no_mobile(
     members = cast(list[dict[str, object]], body["members"])
     assert {m["user_id"] for m in members} == {body["owner_user_id"], member_id}
     assert body["pending_requests"] is None
-    # Nothing the member's browser received carries a mobile number.
-    for call in traffic.api_calls():
-        if call.path != "/api/me":
-            assert "mobile" not in _keys(call.json() if call.body else None), call.url
+
+
+@covers("test_owner_sees_the_requesters_user_id_and_phone")
+def test_owner_group_detail_carries_mobiles(
+    page: Page, other_page: Page, traffic: ApiTraffic
+) -> None:
+    owner, requester = page, other_page
+    name = _owned_group(owner)
+    requester_id = unique_user_id("bob")
+    load_signed_out(requester)
+    sign_up(requester, requester_id, "Bob", mobile="+44 7700 900123")
+    search_groups(requester, name)
+    with requester.expect_response(lambda r: r.url.endswith("/join-requests")):
+        section(requester, "Browse groups").get_by_role(
+            "button", name=f"Request to join {name}"
+        ).click()
+    load_home(owner)
+    before = len(traffic.api_calls())
+
+    open_group(owner, "My groups", name)
+
+    calls = traffic.api_calls()[before:]
+    assert len(calls) == 1, traffic.describe()
+    assert (calls[0].method, calls[0].path.startswith("/api/groups/")) == ("GET", True)
+    body = _json_object(calls[0])
+    members = cast(list[dict[str, object]], body["members"])
+    pending = cast(list[dict[str, object]], body["pending_requests"])
+    assert [(m["user_id"], m["mobile"]) for m in members] == [
+        (body["owner_user_id"], "+919876543210")
+    ]
+    assert [(p["user_id"], p["display_name"], p["mobile"]) for p in pending] == [
+        (requester_id, "Bob", "+447700900123")
+    ]
 
 
 @covers("test_member_changes_their_mobile_number")

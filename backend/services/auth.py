@@ -20,7 +20,9 @@ from backend.domain.errors import (
     UnauthenticatedError,
 )
 from backend.domain.models import (
+    DISPLAY_NAME_MAX_LENGTH,
     MAX_OPEN_SIGN_INS,
+    MAX_PENDING_PER_ACCOUNT,
     MAX_PENDING_REGISTRATIONS,
     SIGN_IN_LIFETIME,
     Member,
@@ -37,7 +39,6 @@ logger = logging.getLogger(__name__)
 
 HOME = "/"
 MAX_RETURN_TO_LENGTH = 200
-MAX_SUGGESTED_NAME_LENGTH = 50
 # One slash, then printable ASCII with no backslash: never "//host", "/\host" or a scheme.
 # Browsers drop tabs and newlines from URLs, so "/<tab>/host" would become "//host".
 APP_PATH = re.compile(r"/(?![/\\])[\x21-\x5b\x5d-\x7e]*")
@@ -163,10 +164,11 @@ def finish_sign_in(
                         token_hash=hash_token(token),
                         provider=provider.name,
                         subject=identity.subject,
-                        suggested_name=name if len(name) <= MAX_SUGGESTED_NAME_LENGTH else "",
+                        suggested_name=name if len(name) <= DISPLAY_NAME_MAX_LENGTH else "",
                         return_to=flow.return_to,
                         expires_at=now() + SIGN_IN_LIFETIME,
-                    )
+                    ),
+                    keep=MAX_PENDING_PER_ACCOUNT,
                 )
                 outcome = NeedsRegistration(registration_token=token)
     if isinstance(outcome, SignedIn):
@@ -214,5 +216,5 @@ def complete_registration(
         tx.add_identity(pending.provider, pending.subject, user_id)
         tx.delete_pending_registration(token_hash)
         session_token = start_session(tx, user_id, now)
-    logger.info("registered provider=%s user_id=%s", pending.provider, user_id)
+    logger.info("registration provider=%s outcome=registered user_id=%s", pending.provider, user_id)
     return member, session_token

@@ -1,4 +1,3 @@
-import sqlite3
 import threading
 from pathlib import Path
 from typing import Any
@@ -8,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.tests.integration.conftest import SignedIn
+from backend.tests.integration.test_auth import every_stored_value
 
 PROFILE = "/api/me/profile"
 OLD_MOBILE = "+919876543210"
@@ -43,14 +43,17 @@ def test_owner_sees_the_new_mobile_and_the_old_one_is_gone(
     signed_in: SignedIn, db_path: Path
 ) -> None:
     ada, bob, goa = owned_group_with(signed_in)
+    # A number only Bob has, so its absence anywhere in the database means it's gone.
+    assert save(bob, "Bob", "+44 7700 900111").status_code == 200
+    assert "+447700900111" in every_stored_value(db_path)
 
     assert save(bob, "Bob", "+44 7700 900456").status_code == 200
 
     members = {m["user_id"]: m for m in ada.get(f"/api/groups/{goa}").json()["members"]}
     assert members["bob"]["mobile"] == "+447700900456"
-    with sqlite3.connect(db_path) as db:
-        mobiles = [row[0] for row in db.execute("SELECT mobile FROM members WHERE user_id='bob'")]
-    assert mobiles == ["+447700900456"]
+    stored = every_stored_value(db_path)
+    assert "+447700900456" in stored
+    assert not any("900111" in str(value) for value in stored)
 
 
 def test_changing_the_name_keeps_everything_else(signed_in: SignedIn) -> None:
